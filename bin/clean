@@ -1,0 +1,5 @@
+#!/bin/bash
+
+DIR="$HOME/jbLPC"
+
+find $DIR -name "*.class" -type f -delete

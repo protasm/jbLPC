@@ -1,0 +1,3 @@
+#!/bin/bash
+
+jbLPC "$HOME/jbLPC/scripts/fib.c"
