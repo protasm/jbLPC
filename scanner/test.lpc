@@ -1,0 +1,18 @@
+println("This is
+a
+test.");
+
+/* comment */ #define FOO bar
+
+/*** //test **/
+
+//test /*test*/ //test
+
+println("done");
+
+/*****
+ * test
+ */
+
+println(1);
+#include "/test/file"

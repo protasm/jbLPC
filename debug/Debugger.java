@@ -11,9 +11,7 @@ import jbLPC.vm.CallFrame;
 
 import static jbLPC.compiler.OpCode.*;
 
-public class Debugger implements PropsObserver {
-  private Props properties;
-
+public class Debugger extends PropsObserver {
   //Cached properties
   private boolean printCodes;
   private boolean printConstants;
@@ -25,9 +23,7 @@ public class Debugger implements PropsObserver {
 
   //Debugger(Props)
   public Debugger(Props properties) {
-    this.properties = properties;
-
-    properties.registerObserver(this);
+    super(properties, null);
 
     updateCachedProperties();
   }
@@ -286,13 +282,9 @@ public class Debugger implements PropsObserver {
     return (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
   }
 
-  //notifyPropertiesChanged()
-  public void notifyPropertiesChanged() {
-    updateCachedProperties();
-  }
-
   //updateCachedProperties()
-  private void updateCachedProperties() {
+  @Override
+  protected void updateCachedProperties() {
     printCodes = properties.getBool("DEBUG_PRINT_CODES");
     printConstants = properties.getBool("DEBUG_PRINT_CONSTANTS");
     printGlobals = properties.getBool("DEBUG_PRINT_GLOBALS");

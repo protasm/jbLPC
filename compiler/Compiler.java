@@ -18,9 +18,7 @@ import static jbLPC.compiler.OpCode.*;
 import static jbLPC.parser.Parser.Precedence.*;
 import static jbLPC.scanner.TokenType.*;
 
-public class Compiler implements PropsObserver {
-  private Props properties;
-  private Debugger debugger;
+public class Compiler extends PropsObserver {
   private Scanner scanner;
   private Map<TokenType, ParseRule> typeToRule;
   private Parser parser;
@@ -34,12 +32,7 @@ public class Compiler implements PropsObserver {
 
   //Compiler
   public Compiler(Props properties, Debugger debugger) {
-    this.properties = properties;
-    this.debugger = debugger;
-
-    properties.registerObserver(this);
-
-    updateCachedProperties();
+    super(properties, debugger);
 
     if (debugPrintProgress) debugger.printProgress("Initializing compiler....");
 
@@ -69,8 +62,7 @@ public class Compiler implements PropsObserver {
 
     scanner.scan(source);
 
-    if (debugPrintProgress)
-      debugger.printProgress("Compiling....");
+    if (debugPrintProgress) debugger.printProgress("Compiling....");
 
     advance();
 
@@ -88,7 +80,7 @@ public class Compiler implements PropsObserver {
     parser.setPrevious(parser.current());
 
     for (;;) {
-      parser.setCurrent(scanner.scanToken());
+      parser.setCurrent(scanner.getNextToken());
 
       if (parser.current().type() != TOKEN_ERROR)
         break;
@@ -689,9 +681,9 @@ public class Compiler implements PropsObserver {
     //Initializer clause.
     if (match(TOKEN_SEMICOLON)) {
       // No initializer.
-    } else if (match(TOKEN_VAR))
-      varDeclaration();
-    else
+    //} else if (match(TOKEN_VAR))
+    //  varDeclaration();
+    } else
       expressionStatement();
 
     int loopStart = currentChunk().codesCount();
@@ -816,9 +808,9 @@ public class Compiler implements PropsObserver {
       if (parser.previous().type() == TOKEN_SEMICOLON) return;
 
       switch (parser.current().type()) {
-        case TOKEN_CLASS:
-        case TOKEN_FUN:
-        case TOKEN_VAR:
+        //case TOKEN_CLASS:
+        //case TOKEN_FUN:
+        //case TOKEN_VAR:
         case TOKEN_FOR:
         case TOKEN_IF:
         case TOKEN_WHILE:
@@ -835,13 +827,13 @@ public class Compiler implements PropsObserver {
 
   //declaration()
   private void declaration() {
-    if (match(TOKEN_CLASS)) 
-      classDeclaration();
-    else if (match(TOKEN_FUN))
-      funDeclaration();
-    else if (match(TOKEN_VAR))
-      varDeclaration();
-    else
+    //if (match(TOKEN_CLASS)) 
+    //  classDeclaration();
+    //else if (match(TOKEN_FUN))
+    //  funDeclaration();
+    //else if (match(TOKEN_VAR))
+    //  varDeclaration();
+    //else
       statement();
 
     if (parser.panicMode())
@@ -922,32 +914,27 @@ public class Compiler implements PropsObserver {
     register(TOKEN_IDENTIFIER,    new VariableParselet(), null,                 PREC_NONE);
     register(TOKEN_STRING,        new StringParselet(),   null,                 PREC_NONE);
     register(TOKEN_NUMBER,        new NumberParselet(),   null,                 PREC_NONE);
-    register(TOKEN_AND,           null,                   new AndParselet(),    PREC_AND);
-    register(TOKEN_CLASS,         null,                   null,                 PREC_NONE);
+    register(TOKEN_DBL_AMP,       null,                   new AndParselet(),    PREC_AND);
+    //register(TOKEN_CLASS,         null,                   null,                 PREC_NONE);
     register(TOKEN_ELSE,          null,                   null,                 PREC_NONE);
     register(TOKEN_FALSE,         new LiteralParselet(),  null,                 PREC_NONE);
     register(TOKEN_FOR,           null,                   null,                 PREC_NONE);
-    register(TOKEN_FUN,           null,                   null,                 PREC_NONE);
+    //register(TOKEN_FUN,           null,                   null,                 PREC_NONE);
     register(TOKEN_IF,            null,                   null,                 PREC_NONE);
     register(TOKEN_NIL,           new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_OR,            null,                   new OrParselet(),     PREC_OR);
+    register(TOKEN_DBL_PIPE,      null,                   new OrParselet(),     PREC_OR);
     register(TOKEN_RETURN,        null,                   null,                 PREC_NONE);
     register(TOKEN_SUPER,         new SuperParselet(),    null,                 PREC_NONE);
     register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
     register(TOKEN_TRUE,          new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_VAR,           null,                   null,                 PREC_NONE);
+    //register(TOKEN_VAR,           null,                   null,                 PREC_NONE);
     register(TOKEN_WHILE,         null,                   null,                 PREC_NONE);
     register(TOKEN_ERROR,         null,                   null,                 PREC_NONE);
     register(TOKEN_EOF,           null,                   null,                 PREC_NONE);
   }
 
-  //notifyPropertiesChanged()
-  public void notifyPropertiesChanged() {
-    updateCachedProperties();
-  }
-
   //updateCachedProperties()
-  private void updateCachedProperties() {
+  protected void updateCachedProperties() {
     debugMaster = properties.getBool("DEBUG_MASTER");
     debugPrintProgress = debugMaster && properties.getBool("DEBUG_PRINT_PROGRESS");
     debugPrintCode = debugMaster && properties.getBool("DEBUG_PRINT_CODE");
