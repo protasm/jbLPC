@@ -1,22 +1,27 @@
 package jbLPC.scanner;
 
-import java.util.ArrayList;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 
 import jbLPC.debug.Debugger;
 import jbLPC.main.Props;
-
+import jbLPC.main.PropsObserver;
+import jbLPC.preprocessor.Preprocessor;
+import jbLPC.preprocessor.source.StringLexerSource;
 import static jbLPC.scanner.TokenType.*;
 
-public class Scanner extends SourceReader {
+public class Scanner implements PropsObserver, Iterator<Token> {
+  private static final char EOL = '\n';
   private static final Map<String, TokenType> reservedWords;
-  private static final Map<Character, TokenType> singleCharLexemes;
-  private Map<String, String> defines;
-  private List<Token> tokens;
-  private int nextTokenIdx;
-  private boolean noTokensYetThisLine;
+  private static final Map<Character, TokenType> oneCharLexemes;
+  private ScannableSource ss;
 
   //Cached properties
   private boolean debugMaster;
@@ -26,249 +31,257 @@ public class Scanner extends SourceReader {
   static {
     reservedWords = new HashMap<>() {{
       // Keywords.
-      put("else",   TOKEN_ELSE);
-      put("false",  TOKEN_FALSE);
-      put("for",    TOKEN_FOR);
-      put("if",     TOKEN_IF);
-      put("nil",    TOKEN_NIL);
-      put("return", TOKEN_RETURN);
-      put("super",  TOKEN_SUPER);
-      put("this",   TOKEN_THIS);
-      put("true",   TOKEN_TRUE);
-      put("while",  TOKEN_WHILE);
+      put("else",    TOKEN_ELSE);
+      put("false",   TOKEN_FALSE);
+      put("for",     TOKEN_FOR);
+      put("if",      TOKEN_IF);
+      put("inherit", TOKEN_INHERIT);
+      put("nil",     TOKEN_NIL);
+      put("return",  TOKEN_RETURN);
+      put("this",    TOKEN_THIS);
+      put("true",    TOKEN_TRUE);
+      put("while",   TOKEN_WHILE);
 
-      // Types.
-      put("int",    TOKEN_T_INT);
-      put("object", TOKEN_T_OBJECT);
-      put("status", TOKEN_T_STATUS);
-      put("string", TOKEN_T_STRING);
-      put("void",   TOKEN_T_VOID);
+      // LPC Types.
+      put("int",    TOKEN_TYPE);
+      put("object", TOKEN_TYPE);
+      put("status", TOKEN_TYPE);
+      put("string", TOKEN_TYPE);
+      put("void",   TOKEN_TYPE);
     }};
 
-    singleCharLexemes = new HashMap<>() {{
+    oneCharLexemes = new HashMap<>() {{
       put('(', TOKEN_LEFT_PAREN);
       put(')', TOKEN_RIGHT_PAREN);
       put('{', TOKEN_LEFT_BRACE);
       put('}', TOKEN_RIGHT_BRACE);
-      put(',', TOKEN_COMMA);
       put('.', TOKEN_DOT);
-      put('+', TOKEN_PLUS);
+      put(',', TOKEN_COMMA);
       put(';', TOKEN_SEMICOLON);
-      put('*', TOKEN_STAR); 
     }};
   }
 
-  //Scanner(Props, Debugger)
-  public Scanner(Props properties, Debugger debugger) {
-    super(properties, debugger);
+  //Scanner(String)
+  public Scanner(String source) {
+    Props.instance().registerObserver(this);
 
-    if (debugPrintProgress) debugger.printProgress("Initializing scanner....");
-  }
+    Preprocessor pp = new Preprocessor();
 
-  //scan(String)
-  public void scan(String source) {
-    setSource(source); //resets head, tail, line
+    pp.addInput(new StringLexerSource(source, true));
+    pp.getSystemIncludePath().add(".");
 
-    defines = new HashMap<>();
-    tokens = new ArrayList<>();
-    nextTokenIdx = 0;
-    noTokensYetThisLine = true;
+    ss = new ScannableSource(pp.preprocess());
 
-    if (debugPrintSource) debugger.printSource(source);
-    if (debugPrintProgress) debugger.printProgress("Scanning....");
-
-    // Scan tokens.
-    while (!isAtEnd()) {
-      // We are at the beginning of the next lexeme.
-      tail = head;
-
-      lexToken();
-    }
+    if (debugPrintSource) Debugger.instance().printSource(ss.toString());
+    if (debugPrintProgress) Debugger.instance().printProgress("Scanner initialized.");
   }
 
   //lexToken()
-  private void lexToken() {
-    char c = peekAndAdvance();
-    TokenType type = singleCharLexemes.get(c);
+  public Token lexToken() {
+    if (ss.atEnd())
+      return new Token(TOKEN_EOF, "", null, ss.line());
 
-    if (type != null) addToken(type);
-    else switch (c) {
+    ss.sync(); // reset (tail = head)
+
+    char c = ss.peekAndAdvance();
+
+    if (oneCharLexemes.containsKey(c))
+      return makeToken(oneCharLexemes.get(c));
+    if (isDigit(c)) return number();
+    if (isAlpha(c)) return identifier();
+
+    switch (c) {
+      case EOL: return null;
+      case '"': return string();
       case '&':
-        if (match('&')) addToken(TOKEN_DBL_AMP);
-        else unexpectedChar();
-
-        break;
+        if (ss.match('&')) return makeToken(TOKEN_DBL_AMP);
+        else return unexpectedChar(c);
       case '|':
-        if (match('|')) addToken(TOKEN_DBL_PIPE);
-        else unexpectedChar();
-
-        break;
+        if (ss.match('|')) return makeToken(TOKEN_DBL_PIPE);
+        else return unexpectedChar(c);
+      case ':':
+        if (ss.match(':')) return makeToken(TOKEN_SUPER);
+        else return unexpectedChar(c);
       case '-':
-        addToken(match('>') ? TOKEN_INVOKE : TOKEN_MINUS); break;
+        if (ss.match('-'))
+          return makeToken(TOKEN_MINUS_MINUS);
+        else if (ss.match('='))
+          return makeToken(TOKEN_MINUS_EQUAL);
+        else if (ss.match('>'))
+          return makeToken(TOKEN_INVOKE);
+        else
+          return makeToken(TOKEN_MINUS);
+      case '+':
+        if (ss.match('+'))
+          return makeToken(TOKEN_PLUS_PLUS);
+        else if (ss.match('='))
+          return makeToken(TOKEN_PLUS_EQUAL);
+        else
+          return makeToken(TOKEN_PLUS);
       case '!':
-        addToken(match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG); break;
+        return makeToken(ss.match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
       case '=':
-        addToken(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL); break;
+        return makeToken(ss.match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
       case '<':
-        addToken(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS); break;
+        return makeToken(ss.match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
       case '>':
-        addToken(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER); break;
+        return makeToken(ss.match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
       case '/':
-        if (match('/')) singleLineComment();
-        else if (match('*')) multiLineComment();
-        else addToken(TOKEN_SLASH);
+        if (ss.match('/'))
+          return lineComment();
+        else if (ss.match('*'))
+          return blockComment();
+        else if (ss.match('='))
+          return makeToken(TOKEN_SLASH_EQUAL);
+        else
+          return makeToken(TOKEN_SLASH);
+      case '*':
+        return makeToken(ss.match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+      case ' ':
+      case '\r':
+      case '\t':
+        while (isWhitespace(ss.peek())) ss.advance(); //fast-forward through whitespace
 
-        break;
-      case ' ': case '\r': case '\t': break; // Ignore whitespace.
-      case '\n': newLine(); break;
-      case '"': string(); break;
-      case '#':
-        if (noTokensYetThisLine) directive();
-        else unexpectedChar();
-
-        break;
+        return null;
       default:
-        if (isDigit(c)) number();
-        else if (isAlpha(c)) identifier();
-        else unexpectedChar();
-
-        break;
-    }
+        return unexpectedChar(c);
+    } //switch
   }
 
-  //newLine()
-  private void newLine() {
-    line++;
+  //lineComment()
+  private Token lineComment() {
+    ss.seek(EOL);
 
-    noTokensYetThisLine = true; //reset
+    return null;
   }
 
-  //singleLineComment()
-  private void singleLineComment() {
-    while (peek() != '\n' && !isAtEnd())
-      head++;
-  }
+  //blockComment()
+  private Token blockComment() {
+    while (!ss.atEnd()) {
+      ss.seek('*');
 
-  //multiLineComment()
-  private void multiLineComment() {
-    if (!seek('*')) {
-      errorToken("Unterminated multiline comment.");
+      if (ss.peekPrev() == '/')
+        return errorToken("Nested block comment");
 
-      return;
-    }
+      ss.advance();
 
-    //Consume the '*'.
-    head++;
+      if (ss.match('/')) return null;
+    } //while
 
-    if (peek() != '/')
-      //Continue seeking end of comment ("*/").
-      multiLineComment();
-    else
-      //Consume the '/'.
-      head++;
-  }
-
-  //directive()
-  private void directive() {
-    singleLineComment(); //temp
+    // Error if we get here.
+    return errorToken("Unterminated block comment.");
   }
 
   //identifier()
-  private void identifier() {
-    while (isAlphaNumeric(peek())) head++;
+  private Token identifier() {
+    while (isAlphaNumeric(ss.peek())) ss.advance();
 
-    String text = source.substring(tail, head);
-    TokenType type = reservedWords.get(text);
+    TokenType type = reservedWords.get(ss.read());
 
     if (type == null) type = TOKEN_IDENTIFIER;
 
-    addToken(type);
+    return makeToken(type);
   }
 
   //number()
-  private void number() {
-    while (isDigit(peek())) head++;
+  private Token number() {
+    while (isDigit(ss.peek())) ss.advance();
 
     // Look for a fractional part.
-    if (peek() == '.' && isDigit(peekNext())) {
-      // Consume the '.'
-      head++;
+    if (ss.peek() == '.' && isDigit(ss.peekNext())) {
+      ss.advance(); //consume the '.'
 
-      while (isDigit(peek())) head++;
+      while (isDigit(ss.peek())) ss.advance();
     }
 
-    addToken(
-      TOKEN_NUMBER,
-      Double.parseDouble(source.substring(tail, head))
-    );
+    return makeToken(TOKEN_NUMBER, Double.parseDouble(ss.read()));
   }
 
   //string()
-  private void string() {
-    if (!seek('"')) {
-      errorToken("Unterminated string.");
+  private Token string() {
+    if (!ss.seek('"'))
+      return errorToken("Unterminated string.");
 
-      return;
-    }
+    ss.advance(); //consume the closing '"'
 
-    // Consume the closing '"'.
-    head++;
-
-    // Trim the surrounding quotes.
-    String value = source.substring(tail + 1, head - 1);
-
-    addToken(TOKEN_STRING, value);
+    return makeToken(TOKEN_STRING, ss.readTrimmed());
   }
 
-  //seek(char)
-  private boolean seek(char c) {
-    while (peek() != c && !isAtEnd()) {
-      if (peek() == '\n')
-        newLine();
-
-      head++;
-    }
-
-    return !isAtEnd();
+  //isWhitespace(char)
+  private boolean isWhitespace(char c) {
+    return (c == ' ') || (c == '\r') || (c == '\t');
   }
 
-  //unexpectedChar()
-  private void unexpectedChar() {
-    errorToken("Unexpected character: '" + peekPrev() + "'.");
+  //isAlpha(char)
+  private boolean isAlpha(char c) {
+    return (c >= 'a' && c <= 'z') ||
+           (c >= 'A' && c <= 'Z') ||
+            c == '_';
+  }
+
+  //isAlphaNumeric(char)
+  private boolean isAlphaNumeric(char c) {
+    return isAlpha(c) || isDigit(c);
+  }
+
+  //isDigit(char)
+  private boolean isDigit(char c) {
+    return c >= '0' && c <= '9';
+  }
+
+  //unexpectedChar(char)
+  private Token unexpectedChar(char c) {
+    return errorToken("Unexpected character: '" + c + "'.");
   }
 
   //errorToken(String)
-  private void errorToken(String errorText) {
-    tokens.add(new Token(TOKEN_ERROR, errorText, null, line));
+  private Token errorToken(String message) {
+    return new Token(TOKEN_ERROR, message, null, ss.line());
   }
 
-  //addToken(TokenType)
-  private void addToken(TokenType type) {
-    addToken(type, null);
+  //makeToken(TokenType)
+  private Token makeToken(TokenType type) {
+    return makeToken(type, null);
   }
 
-  //addToken(TokenType, Object)
-  private void addToken(TokenType type, Object literal) {
-    String text = source.substring(tail, head);
-
-    tokens.add(new Token(type, text, literal, line));
-
-    noTokensYetThisLine = false;
+  //makeToken(TokenType, Object)
+  private Token makeToken(TokenType type, Object literal) {
+    return new Token(type, ss.read(), literal, ss.line());
   }
 
-  //getNextToken()
-  public Token getNextToken() {
-    if (nextTokenIdx > (tokens.size() - 1))
-      return (new Token(TOKEN_EOF, "", null, line));
-    else
-      return tokens.get(nextTokenIdx++);
+  //hasNext()
+  @Override
+  public boolean hasNext() {
+    return true;
+  }
+
+  //next()
+  @Override
+  public Token next() {
+    Token token;
+
+    do {
+      token = lexToken();
+    } while (token == null);
+
+    return token;
+  }
+
+  //remove()
+  @Override
+  public void remove() {
+    throw new UnsupportedOperationException();
   }
 
   //updateCachedProperties()
-  @Override
-  protected void updateCachedProperties() {
-    debugMaster = properties.getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && properties.getBool("DEBUG_PRINT_PROGRESS");
-    debugPrintSource = debugMaster && properties.getBool("DEBUG_PRINT_SOURCE");
+  private void updateCachedProperties() {
+    debugMaster = Props.instance().getBool("DEBUG_MASTER");
+    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
+    debugPrintSource = debugMaster && Props.instance().getBool("DEBUG_SOURCE");
+  }
+
+  //notifyPropertiesChanged()
+  public void notifyPropertiesChanged() {
+    updateCachedProperties();
   }
 }

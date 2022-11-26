@@ -1,0 +1,3 @@
+#!/bin/bash
+
+java jbLPC.preprocessor.Main $1

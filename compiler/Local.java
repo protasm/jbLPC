@@ -8,12 +8,12 @@ public class Local {
   private boolean isCaptured;
 
   //Local()
-  Local() {
+  public Local() {
     this(null, -1);
   }
 
   //Local(Token, int)
-  Local(Token token, int depth) {
+  public Local(Token token, int depth) {
     this.token = token;
     this.depth = depth;
 
@@ -43,5 +43,11 @@ public class Local {
   //setIsCaptured(boolean)
   public void setIsCaptured(boolean isCaptured) {
     this.isCaptured = isCaptured;
+  }
+
+  //toString()
+  @Override
+  public String toString() {
+    return "[ " + token.lexeme() + " (" + depth + ") ]";
   }
 }

@@ -4,8 +4,8 @@ import jbLPC.compiler.Function;
 
 public class CallFrame {
   private Closure closure;
-  private int base;
-  private int ip;
+  private int base; //index of bottom-most vStack value in this frame
+  private int ip; //index of next Chunk code to execute
 
   //CallFrame(Closure, int)
   CallFrame(Closure closure, int base) {
@@ -43,5 +43,11 @@ public class CallFrame {
   //setIP(int)
   public void setIP(int ip) {
     this.ip = ip;
+  }
+
+  //toString()
+  @Override
+  public String toString() {
+    return "@Frame: " + closure.function().toString() + "@";
   }
 }

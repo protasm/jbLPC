@@ -1,31 +1,50 @@
 package jbLPC.debug;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import jbLPC.compiler.Chunk;
 import jbLPC.compiler.Function;
-import jbLPC.compiler.CompilerLocals;
+import jbLPC.compiler.Scope;
 import jbLPC.main.Props;
 import jbLPC.main.PropsObserver;
+import jbLPC.nativefn.NativeFn;
 import jbLPC.vm.CallFrame;
 
 import static jbLPC.compiler.OpCode.*;
 
-public class Debugger extends PropsObserver {
+public class Debugger implements PropsObserver {
+  private Debugger properties;
+
   //Cached properties
   private boolean printCodes;
   private boolean printConstants;
   private boolean printGlobals;
   private boolean printLines;
   private boolean printLocals;
+  private boolean printUpvalues;
   private boolean printOpCode;
   private boolean printStack;
 
-  //Debugger(Props)
-  public Debugger(Props properties) {
-    super(properties, null);
+  static private Debugger _instance; //singleton
 
-    updateCachedProperties();
+  //Debugger()
+  private Debugger() {
+    Props.instance().registerObserver(this);
+  }
+
+  //instance()
+  public static Debugger instance() {
+    if (_instance == null) {
+      //critical section
+      synchronized(Debugger.class) {
+        if (_instance == null)
+          _instance = new Debugger();
+      }
+    }
+
+    return _instance;
   }
 
   //printProgress(String)
@@ -40,36 +59,80 @@ public class Debugger extends PropsObserver {
     System.out.println((source.length() == 0) ? "[ no source ]" : source);
   }
 
-  ////traceExecution(CallFrame, Map, Object[])
-  public void traceExecution(CallFrame frame, Map<String, Object> globals, Object[] substack) {
-    if (printGlobals)
-      System.out.println("Globals: " + globals);
+  //traceExecution(CallFrame, Map<String, Object>, Object[])
+  public void traceExecution(CallFrame frame, Map<String, Object> globals, Object[] stackValues) {
+    if (printGlobals) {
+      System.out.print("Globals: ");
 
-    if (printStack)
-      //System.out.println("          " + stack);
-      System.out.println("          " + java.util.Arrays.toString(substack));
+      System.out.print(
+        globals.entrySet()
+               .stream()
+               .filter(item -> !(item.getValue() instanceof NativeFn))
+               .collect(Collectors.toList())
+      );
+
+      System.out.print("\n");
+    }
+
+    if (printStack) {
+      System.out.print("          ");
+
+      for (int i = 0; i < stackValues.length; i++) {
+        Object stackValue = stackValues[i];
+
+        if (stackValue instanceof String)
+          System.out.print("[ \"" + stackValue + "\" ]");
+        else
+          System.out.print("[ " + stackValue + " ]");
+
+      }
+
+      System.out.print("\n");
+    } //if (printStack)
 
     disassembleInstruction(frame.closure().function().chunk(), frame.ip());
   }
 
-  //disassembleChunk(Chunk, CompilerLocals, String)
-  public void disassembleChunk(Chunk chunk, CompilerLocals locals, String name) {
+  //disassembleScope(Scope)
+  public void disassembleScope(Scope scope) {
+    Chunk chunk = scope.function().chunk();
+
+    printBanner(scope.function().toString());
+
     if (printCodes) {
-      System.out.println("Codes: " + chunk.codes());
+      System.out.println("Codes: " + chunk.printCodes());
 
       if (printLines)
         System.out.println("Lines: " + chunk.lines());
     }
 
-    if (printConstants)
-      System.out.println("Constants: " + chunk.constants());
+    if (printConstants) {
+      System.out.print("Constants: [ ");
+
+      Object[] constantValues = chunk.constants().toArray();
+
+      for (int i = 0; i < constantValues.length; i++) {
+        Object constantValue = constantValues[i];
+
+        if (constantValue instanceof String)
+          System.out.print("\"" + constantValue + "\"");
+        else
+          System.out.print(constantValue);
+
+        if (i < constantValues.length - 1)
+          System.out.print(", ");
+      }
+
+      System.out.print(" ]\n");
+    }
 
     if (printLocals)
-      System.out.println("Locals: " + locals);
+      System.out.println("Locals: " + scope.locals());
 
-    printBanner(name);
+    if (printUpvalues)
+      System.out.println("Upvalues: " + scope.upvalues());
 
-    for (int offset = 0; offset < chunk.codesCount();)
+    for (int offset = 0; offset < chunk.codes().size();)
       offset = disassembleInstruction(chunk, offset);
   }
 
@@ -85,18 +148,18 @@ public class Debugger extends PropsObserver {
 
     if (
       (offset > 0) &&
-      (chunk.lines()[offset] == chunk.lines()[offset - 1])
+      (chunk.lines().get(offset) == chunk.lines().get(offset - 1))
     )
       System.out.print("   | ");
     else
-      System.out.print(String.format("%4d ", chunk.lines()[offset]));
+      System.out.print(String.format("%4d ", chunk.lines().get(offset)));
 
     if (printOpCode)
       System.out.print("(" + String.format("0x%02X", instruction) + ") ");
 
     switch (instruction) {
-      case OP_CONSTANT:
-        return constantInstruction("OP_CONSTANT", chunk, offset);
+      case OP_GET_CONSTANT:
+        return constantInstruction("OP_GET_CONSTANT", chunk, offset);
       case OP_NIL:
         return simpleInstruction("OP_NIL", offset);
       case OP_TRUE:
@@ -143,8 +206,6 @@ public class Debugger extends PropsObserver {
         return simpleInstruction("OP_NOT", offset);
       case OP_NEGATE:
         return simpleInstruction("OP_NEGATE", offset);
-      case OP_PRINT:
-        return simpleInstruction("OP_PRINT", offset);
       case OP_JUMP:
         return jumpInstruction("OP_JUMP", 1, chunk, offset);
       case OP_JUMP_IF_FALSE:
@@ -152,7 +213,7 @@ public class Debugger extends PropsObserver {
       case OP_LOOP:
         return jumpInstruction("OP_LOOP", -1, chunk, offset);
       case OP_CALL:
-        return byteOperandInstruction("OP_CALL", chunk, offset);
+        return byteOperandInstruction("OP_CALL", chunk, offset, "# args:");
       case OP_INVOKE:
         return invokeInstruction("OP_INVOKE", chunk, offset);
       case OP_SUPER_INVOKE:
@@ -163,12 +224,14 @@ public class Debugger extends PropsObserver {
         return simpleInstruction("OP_CLOSE_UPVALUE", offset);
       case OP_RETURN:
         return simpleInstruction("OP_RETURN", offset);
-      case OP_CLASS:
-        return constantInstruction("OP_CLASS", chunk, offset);
+      case OP_OBJECT:
+        return constantInstruction("OP_OBJECT", chunk, offset);
       case OP_INHERIT:
         return simpleInstruction("OP_INHERIT", offset);
       case OP_METHOD:
         return constantInstruction("OP_METHOD", chunk, offset);
+      case OP_DEFINE_METHOD:
+        return constantInstruction("OP_DEFINE_METHOD", chunk, offset);
       default:
         System.out.println("Unknown opcode: " + instruction);
 
@@ -180,9 +243,9 @@ public class Debugger extends PropsObserver {
   private int closureInstruction(String name, Chunk chunk, int offset) {
     short operand = getWordOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s %4d ", name, operand));
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
 
-    Function function = (Function)chunk.constants()[operand];
+    Function function = (Function)chunk.constants().get(operand);
 
     System.out.println(function);
 
@@ -205,14 +268,14 @@ public class Debugger extends PropsObserver {
   private int constantInstruction(String name, Chunk chunk, int offset) {
     short operand = getWordOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s %4d ", name, operand));
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
 
-    Object constant = chunk.constants()[operand];
+    Object constant = chunk.constants().get(operand);
 
     if (constant instanceof String)
-      System.out.print("'" + constant + "'\n");
+      System.out.print("(\"" + constant + "\")\n");
     else
-      System.out.print(constant + "\n");
+      System.out.print("(" + constant + ")\n");
 
     return offset + 3;
   }
@@ -220,11 +283,17 @@ public class Debugger extends PropsObserver {
   //invokeInstruction(String, Chunk, int)
   private int invokeInstruction(String name, Chunk chunk, int offset) {
     short operand = getWordOperand(chunk, offset);
-    Object constant = chunk.constants()[operand];
+    Object constant = chunk.constants().get(operand);
     byte argCount = getCode(chunk, offset + 3);
 
-    System.out.print(String.format("%-16s (%d args) %4d ", name, argCount, operand));
-    System.out.print("'" + constant + "'\n");
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
+
+    if (constant instanceof String)
+      System.out.print("(\"" + constant + "\")");
+    else
+      System.out.print("(" + constant + ")");
+
+    System.out.print(String.format(" (%d args)\n", argCount));
 
     return offset + 4;
   }
@@ -236,11 +305,12 @@ public class Debugger extends PropsObserver {
     return offset + 1;
   }
 
-  //byteOperandInstruction(String, Chunk, int)
-  private int byteOperandInstruction(String name, Chunk chunk, int offset) {
+  //byteOperandInstruction(String, Chunk, int, String)
+  private int byteOperandInstruction(String name, Chunk chunk, int offset, String hint) {
     byte operand = getByteOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s %4d\n", name, operand));
+    System.out.print(String.format("%-16s %s %d ", name, hint, operand));
+    System.out.print("\n");
 
     return offset + 2;
   }
@@ -266,31 +336,36 @@ public class Debugger extends PropsObserver {
 
   //getCode(Chunk, int)
   private byte getCode(Chunk chunk, int offset) {
-    return (byte)chunk.codes()[offset];
+    return chunk.codes().get(offset);
   }
 
   //getByteOperand(Chunk, int)
   private byte getByteOperand(Chunk chunk, int offset) {
-   return (byte)chunk.codes()[offset + 1];
+    return chunk.codes().get(offset + 1);
   }
 
   //getWordOperand(Chunk, int)
   private short getWordOperand(Chunk chunk, int offset) {
-    byte hi = (byte)chunk.codes()[offset + 1];
-    byte lo = (byte)chunk.codes()[offset + 2];
+    byte hi = (byte)chunk.codes().get(offset + 1);
+    byte lo = (byte)chunk.codes().get(offset + 2);
 
     return (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
   }
 
   //updateCachedProperties()
-  @Override
-  protected void updateCachedProperties() {
-    printCodes = properties.getBool("DEBUG_PRINT_CODES");
-    printConstants = properties.getBool("DEBUG_PRINT_CONSTANTS");
-    printGlobals = properties.getBool("DEBUG_PRINT_GLOBALS");
-    printLines = properties.getBool("DEBUG_PRINT_LINES");
-    printLocals = properties.getBool("DEBUG_PRINT_LOCALS");
-    printOpCode = properties.getBool("DEBUG_PRINT_OPCODE");
-    printStack = properties.getBool("DEBUG_PRINT_STACK");
+  private void updateCachedProperties() {
+    printCodes = Props.instance().getBool("DEBUG_CODES");
+    printConstants = Props.instance().getBool("DEBUG_CONSTS");
+    printGlobals = Props.instance().getBool("DEBUG_GLOBALS");
+    printLines = Props.instance().getBool("DEBUG_LINES");
+    printLocals = Props.instance().getBool("DEBUG_LOCALS");
+    printUpvalues = Props.instance().getBool("DEBUG_UPVALS");
+    printOpCode = Props.instance().getBool("DEBUG_OPCODE");
+    printStack = Props.instance().getBool("DEBUG_STACK");
+  }
+
+  //notifyPropertiesChanged()
+  public void notifyPropertiesChanged() {
+    updateCachedProperties();
   }
 }

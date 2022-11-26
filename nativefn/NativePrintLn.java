@@ -1,9 +1,11 @@
 package jbLPC.nativefn;
 
+import jbLPC.vm.VM;
+
 public class NativePrintLn extends NativeFn {
-  //NativePrintLn()
-  public NativePrintLn() {
-    this.arity = -1; //variadic, 0 or 1 args
+  //NativePrintLn(VM, String, int)
+  public NativePrintLn(VM vm, String fnName, int arity) {
+    super(vm, fnName, arity);
   }
 
   //execute(Object[])
@@ -25,11 +27,5 @@ public class NativePrintLn extends NativeFn {
     }
 
     return null;
-  }
-
-  //toString()
-  @Override
-  public String toString() {
-    return "<nativefn: println>";
   }
 }

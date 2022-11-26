@@ -1,0 +1,19 @@
+void globalSet;
+void globalGet;
+
+void main() {
+  string a = "initial";
+
+  void set() { a = "updated"; }
+
+  void get() {
+    println(a);
+  }
+
+  globalSet = set;
+  globalGet = get;
+}
+
+main();
+globalSet();
+globalGet();

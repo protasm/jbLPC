@@ -19,4 +19,10 @@ public class Upvalue {
   public boolean isLocal() {
     return isLocal;
   }
+
+  //toString()
+  @Override
+  public String toString() {
+    return "[ index " + index + " (isLocal = " + isLocal + ") ]";
+  }
 }

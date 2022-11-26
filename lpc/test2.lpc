@@ -1,0 +1,3 @@
+println("Start test2");
+#define FOO "FOO in test2"
+println("End test2");

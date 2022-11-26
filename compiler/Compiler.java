@@ -1,6 +1,7 @@
 package jbLPC.compiler;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import jbLPC.debug.Debugger;
@@ -13,33 +14,36 @@ import jbLPC.scanner.Scanner;
 import jbLPC.scanner.Token;
 import jbLPC.scanner.TokenType;
 
-import static jbLPC.compiler.CompilerLocals.FunctionType.*;
+import static jbLPC.compiler.Function.FunctionType.*;
 import static jbLPC.compiler.OpCode.*;
 import static jbLPC.parser.Parser.Precedence.*;
 import static jbLPC.scanner.TokenType.*;
 
-public class Compiler extends PropsObserver {
-  private Scanner scanner;
-  private Map<TokenType, ParseRule> typeToRule;
-  private Parser parser;
-  private CompilerLocals currentLocals;
-  private CompilerClass currentClass;
+public abstract class Compiler implements PropsObserver {
+  public abstract Function compile(String name, String source);
+
+  protected Iterator<Token> tokens;
+  private Map<TokenType, ParseRule> tokenTypeToRule;
+  protected Parser parser;
+  protected Scope currScope;
+
+  //the current, innermost class being compiled
+  private CompilerClass currClass;
 
   //Cached properties
-  private boolean debugMaster;
-  private boolean debugPrintProgress;
-  private boolean debugPrintCode;
+  protected boolean debugMaster;
+  protected boolean debugPrintProgress;
+  protected boolean debugPrintComp;
 
-  //Compiler
-  public Compiler(Props properties, Debugger debugger) {
-    super(properties, debugger);
+  //Compiler()
+  public Compiler() {
+    Props.instance().registerObserver(this);
 
-    if (debugPrintProgress) debugger.printProgress("Initializing compiler....");
+    tokenTypeToRule = new HashMap<>();
 
-    scanner = new Scanner(properties, debugger);
-    typeToRule = new HashMap<>();
+    registerTokenTypesToRules();
 
-    registerTokens();
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiler initialized.");
   }
 
   //parser()
@@ -47,40 +51,17 @@ public class Compiler extends PropsObserver {
     return parser;
   }
 
-  //currentClass()
-  public CompilerClass currentClass() {
-    return currentClass;
-  }
-
-  //compile(String)
-  public Function compile(String source) {
-    parser = new Parser();
-
-    currentLocals = new CompilerLocals(
-      null, TYPE_SCRIPT, properties.getInt("MAX_SIGNED_BYTE")
-    );
-
-    scanner.scan(source);
-
-    if (debugPrintProgress) debugger.printProgress("Compiling....");
-
-    advance();
-
-    while (!match(TOKEN_EOF))
-      declaration();
-
-    Function function = endCompilation();
-
-    return parser.hadError() ? null : function;
+  //currClass()
+  public CompilerClass currClass() {
+    return currClass;
   }
 
   //advance()
-  private void advance() {
-    //advance to the next non-error Token (or EOF)
+  protected void advance() {
     parser.setPrevious(parser.current());
 
     for (;;) {
-      parser.setCurrent(scanner.getNextToken());
+      parser.setCurrent(tokens.next());
 
       if (parser.current().type() != TOKEN_ERROR)
         break;
@@ -101,7 +82,7 @@ public class Compiler extends PropsObserver {
   }
 
   //check(TokenType)
-  private boolean check(TokenType type) {
+  protected boolean check(TokenType type) {
     return parser.current().type() == type;
   }
 
@@ -114,14 +95,30 @@ public class Compiler extends PropsObserver {
     return true;
   }
 
-  //register(TokenType, Parselet, Parselet, int)
-  private void register(TokenType type, Parselet prefix, Parselet infix, int precedence) {
-    typeToRule.put(type, new ParseRule(prefix, infix, precedence));
+  //endCompilation(boolean)
+  protected Function endCompilation(boolean emitNil) {
+    if (emitNil)
+      emitByte(OP_NIL);
+
+    emitByte(OP_RETURN);
+
+    //Extract assembled function from temporary structure.
+    Function function = currScope.function();
+
+    function.setUpvalueCount(currScope.upvalues().size());
+
+    if (!parser.hadError() && debugPrintComp)
+      Debugger.instance().disassembleScope(currScope);
+
+    //Step up to higher scope.
+    currScope = currScope.enclosing();
+
+    return function;
   }
 
   //emitByte(byte)
   public void emitByte(byte b) {
-    currentChunk().writeCode(b, parser.previous().line());
+    currChunk().writeByte(b, parser.previous().line());
   }
 
   //emitWord(int)
@@ -131,8 +128,10 @@ public class Compiler extends PropsObserver {
 
   //emitWord(short)
   public void emitWord(short s) {
-    emitByte(highByte(s));
-    emitByte(lowByte(s));
+    byte b1 = highByte(s);
+    byte b2 = lowByte(s);
+
+    currChunk().writeWord(b1, b2, parser.previous().line());
   }
 
   //highByte(short)
@@ -147,11 +146,11 @@ public class Compiler extends PropsObserver {
 
   //emitLoop(int)
   private void emitLoop(int loopStart) {
-    int maxLoop = properties.getInt("MAX_LOOP");
+    int maxLoop = Props.instance().getInt("MAX_LOOP");
 
     emitByte(OP_LOOP);
 
-    int offset = currentChunk().codesCount() - loopStart + 2;
+    int offset = currChunk().codes().size() - loopStart + 2;
 
     if (offset > maxLoop) error("Loop body too large.");
 
@@ -166,25 +165,16 @@ public class Compiler extends PropsObserver {
     emitByte((byte)0xFF);
     emitByte((byte)0xFF);
 
-    return currentChunk().codesCount() - 2;
-  }
-
-  //emitReturn()
-  private void emitReturn() {
-    if (currentLocals.type() == TYPE_INITIALIZER) {
-      emitByte(OP_GET_LOCAL);
-      emitWord(0);
-    } else
-      emitByte(OP_NIL);
-
-    emitByte(OP_RETURN);
+    return currChunk().codes().size() - 2;
   }
 
   //makeConstant(Object)
-  int makeConstant(Object value) {
-    int index = currentChunk().writeConstant(value);
+  public int makeConstant(Object value) {
+    currChunk().constants().add(value);
 
-    if (index > properties.getInt("MAX_SIGNED_SHORT")) {
+    int index = currChunk().constants().size() - 1;
+
+    if (index > Props.instance().getInt("MAX_SIGNED_SHORT")) {
       error("Too many constants in one chunk.");
 
       return 0;
@@ -198,15 +188,15 @@ public class Compiler extends PropsObserver {
   public void emitConstant(Object value) {
     int index = makeConstant(value);
 
-    emitByte(OP_CONSTANT);
+    emitByte(OP_GET_CONSTANT);
     emitWord(index);
   }
 
   //patchJump(int)
   public void patchJump(int offset) {
-    int maxJump = properties.getInt("MAX_JUMP");
+    int maxJump = Props.instance().getInt("MAX_JUMP");
     // -2 to adjust for the bytecode for the jump offset itself.
-    int jump = currentChunk().codesCount() - offset - 2;
+    int jump = currChunk().codes().size() - offset - 2;
 
     if (jump > maxJump)
       error("Too much code to jump over.");
@@ -214,74 +204,72 @@ public class Compiler extends PropsObserver {
     byte hi = highByte((short)jump);
     byte lo = lowByte((short)jump);
 
-    currentChunk().codes()[offset] =  hi;
-    currentChunk().codes()[offset + 1] = lo;
+    currChunk().codes().set(offset, hi);
+    currChunk().codes().set(offset + 1, lo);
   }
 
-  //currentChunk()
-  private Chunk currentChunk() {
-    return currentLocals.function().chunk();
-  }
-
-  //endCompilation()
-  private Function endCompilation() {
-    emitReturn();
-
-    //Extract assembled function from temporary structure.
-    Function function = currentLocals.function();
-
-    if (!parser.hadError() && debugPrintCode)
-      debugger.disassembleChunk(function.chunk(), currentLocals, function.toString());
-
-    //Step up to locals in higher scope.
-    currentLocals = currentLocals.enclosing();
-
-    return function;
+  //currChunk()
+  private Chunk currChunk() {
+    return currScope.function().chunk();
   }
 
   //beginScope()
   private void beginScope() {
-    currentLocals.setScopeDepth(currentLocals.scopeDepth() + 1);
+    currScope.setDepth(currScope.depth() + 1);
   }
 
   //endScope()
   private void endScope() {
-    currentLocals.setScopeDepth(currentLocals.scopeDepth() - 1);
+    currScope.setDepth(currScope.depth() - 1);
 
     while (
-      currentLocals.localsCount() > 0 &&
-      currentLocals.peek().depth() > currentLocals.scopeDepth()
+      !(currScope.locals().isEmpty()) &&
+      currScope.locals().peek().depth() > currScope.depth()
     ) {
-      if (currentLocals.locals()[currentLocals.localsCount() - 1].isCaptured())
+      if (currScope.locals().get(currScope.locals().size() - 1).isCaptured())
         emitByte(OP_CLOSE_UPVALUE);
       else
         emitByte(OP_POP);
 
-      currentLocals.pop();
+      currScope.locals().pop();
     }
   }
 
   //getRule(TokenType)
   public ParseRule getRule(TokenType type) {
-    return typeToRule.get(type);
+    return tokenTypeToRule.get(type);
+  }
+
+  //compoundAssignment(OpCode, int)
+  private void compoundAssignment(byte getOp, byte setOp, byte assignOp, int index) {
+    emitByte(getOp);
+    emitWord(index);
+
+    expression();
+
+    emitByte(assignOp);
+
+    emitByte(setOp);
+    emitWord(index);
   }
 
   //namedVariable(Token, boolean)
+  //generates code to load a variable with the given name onto the stack.
   public void namedVariable(Token token, boolean canAssign) {
     byte getOp;
     byte setOp;
 
-    int arg = resolveLocal(currentLocals, token);
+    int arg = resolveLocal(currScope, token);
 
     if (arg != -1) { //local variable
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
-    } else if ((arg = resolveUpvalue(currentLocals, token)) != -1) { //upvalue
+    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
       getOp = OP_GET_UPVALUE;
       setOp = OP_SET_UPVALUE;
     } else { //global variable
       //add token to constants and store index in arg
-      arg = identifierConstant(token);
+      arg = makeConstant(token.lexeme());
 
       getOp = OP_GET_GLOBAL;
       setOp = OP_SET_GLOBAL;
@@ -292,7 +280,15 @@ public class Compiler extends PropsObserver {
 
       emitByte(setOp);
       emitWord(arg);
-    } else { //retrieval
+    } else if (canAssign && match(TOKEN_MINUS_EQUAL))
+      compoundAssignment(getOp, setOp, OP_SUBTRACT, arg);
+    else if (canAssign && match(TOKEN_PLUS_EQUAL))
+      compoundAssignment(getOp, setOp, OP_ADD, arg);
+    else if (canAssign && match(TOKEN_SLASH_EQUAL))
+      compoundAssignment(getOp, setOp, OP_DIVIDE, arg);
+    else if (canAssign && match(TOKEN_STAR_EQUAL))
+      compoundAssignment(getOp, setOp, OP_MULTIPLY, arg);
+    else { //retrieval
       emitByte(getOp);
       emitWord(arg);
     }
@@ -302,6 +298,8 @@ public class Compiler extends PropsObserver {
   public void parsePrecedence(int precedence) {
     advance();
 
+    // Look up the Parselet to use where the previous token's type
+    // is an expression prefix.
     Parselet prefixRule = getRule(parser.previous().type()).prefix();
 
     if (prefixRule == null) {
@@ -314,6 +312,7 @@ public class Compiler extends PropsObserver {
 
     prefixRule.parse(this, canAssign);
 
+    //infix parsing loop
     while (precedence <= getRule(parser.current().type()).precedence()) {
       advance();
 
@@ -322,14 +321,11 @@ public class Compiler extends PropsObserver {
       infixRule.parse(this, canAssign);
     }
 
-    if (canAssign && match(TOKEN_EQUAL))
-      error("Invalid assignment target.");
-  }
-
-  //identifierConstant(Token)
-  public int identifierConstant(Token token) {
-    //return index of newly added constant
-    return makeConstant(token.lexeme());
+    if (canAssign)
+      if (match(TOKEN_EQUAL) || match(TOKEN_PLUS_EQUAL))
+        //If the = doesn't get consumed as part of the expression, nothing
+        //else is going to consume it. It's an error and we should report it.
+        error("Invalid assignment target.");
   }
 
   //identifiersEqual(Token, Token)
@@ -337,10 +333,10 @@ public class Compiler extends PropsObserver {
     return a.lexeme().equals(b.lexeme());
   }
 
-  //resolveLocal(CompilerLocals, Token)
-  private int resolveLocal(CompilerLocals locals, Token token) {
-    for (int i = locals.localsCount() - 1; i >= 0; i--) {
-      Local local = locals.locals()[i];
+  //resolveLocal(Scope, Token)
+  private int resolveLocal(Scope scope, Token token) {
+    for (int i = scope.locals().size() - 1; i >= 0; i--) {
+      Local local = scope.locals().get(i);
 
       if (identifiersEqual(token, local.token())) {
         if (local.depth() == -1) //"sentinel" depth
@@ -354,16 +350,17 @@ public class Compiler extends PropsObserver {
     return -1;
   }
 
-  //addUpvalue(CompilerLocals, byte, boolean)
-  private int addUpvalue(CompilerLocals locals, byte index, boolean isLocal) {
-    int maxClosureVariables = properties.getInt("MAX_SIGNED_BYTE");
-    //isLocal controls whether closure captures a local variable or
-    //an upvalue from the surrounding function
-    int upvalueCount = locals.function().upvalueCount();
+  //addUpvalue(Scope, byte, boolean)
+  private int addUpvalue(Scope scope, byte index, boolean isLocal) {
+    int maxClosureVariables = Props.instance().getInt("MAX_SIGNED_BYTE");
+
+    int upvalueCount = scope.upvalues().size();
 
     for (int i = 0; i < upvalueCount; i++) {
-      Upvalue upvalue = locals.getUpvalue(i);
+      Upvalue upvalue = scope.getUpvalue(i);
 
+      //isLocal controls whether closure captures a local variable or
+      //an upvalue from the surrounding function
       if (upvalue.index() == index && upvalue.isLocal() == isLocal)
         return i;
     }
@@ -374,57 +371,61 @@ public class Compiler extends PropsObserver {
       return 0;
     }
 
-    return locals.addUpvalue(new Upvalue(index, isLocal));
+    //Return index of the created upvalue in the currScope's
+    //upvalue list.  That index becomes the operand to the
+    //OP_GET_UPVALUE and OP_SET_UPVALUE instructions.
+    return scope.addUpvalue(new Upvalue(index, isLocal));
   }
 
-  //resolveUpvalue(CompilerLocals, Token)
-  private int resolveUpvalue(CompilerLocals locals, Token token) {
-    CompilerLocals enclosing = locals.enclosing();
+  //resolveUpvalue(Scope, Token)
+  private int resolveUpvalue(Scope scope, Token token) {
+    Scope enclosing = scope.enclosing();
 
     if (enclosing == null) return -1;
 
     int local = resolveLocal(enclosing, token);
 
     if (local != -1) {
-      enclosing.locals()[local].setIsCaptured(true);
+      enclosing.locals().get(local).setIsCaptured(true);
 
-      return addUpvalue(locals, (byte)local, true);
+      //Return index of newly-added Upvalue.
+      return addUpvalue(scope, (byte)local, true);
     }
 
     int upvalue = resolveUpvalue(enclosing, token);
 
     if (upvalue != -1)
-      return addUpvalue(locals, (byte)upvalue, false);
+      return addUpvalue(scope, (byte)upvalue, false);
 
     return -1;
   }
 
   //addLocal(Token)
   private void addLocal(Token token) {
-    if (currentLocals.localsCount() >= properties.getInt("MAX_SIGNED_BYTE")) {
+    if (currScope.locals().size() >= Props.instance().getInt("MAX_SIGNED_BYTE")) {
       error("Too many local variables in function.");
 
       return;
     }
 
-    currentLocals.push(new Local(token, -1));
+    currScope.locals().push(new Local(token, -1));
   }
 
   //declareVariable()
-  //In the locals, a variable is "declared" when it is
-  //added to the scope.
   private void declareVariable() {
-    if (currentLocals.scopeDepth() == 0)
+    if (currScope.depth() == 0)
       return;
 
+    //In the locals, a variable is "declared" when it is
+    //added to the scope.
     Token token = parser.previous();
 
     //Start at the end of the locals array and work backward,
     //looking for an existing variable with the same name.
-    for (int i = currentLocals.localsCount() - 1; i >= 0; i--) {
-      Local local = currentLocals.locals()[i];
+    for (int i = currScope.locals().size() - 1; i >= 0; i--) {
+      Local local = currScope.locals().get(i);
 
-      if (local.depth() != -1 && local.depth() < currentLocals.scopeDepth())
+      if (local.depth() != -1 && local.depth() < currScope.depth())
         break;
 
       if (identifiersEqual(token, local.token()))
@@ -443,21 +444,21 @@ public class Compiler extends PropsObserver {
 
     //Exit the function if we're in a local scope,
     //returning a dummy table index.
-    if (currentLocals.scopeDepth() > 0) return 0;
+    if (currScope.depth() > 0) return 0;
 
-    return identifierConstant(parser.previous());
+    return makeConstant(parser.previous().lexeme());
   }
 
   //markInitialized()
   private void markInitialized() {
-    if (currentLocals.scopeDepth() == 0) return;
+    if (currScope.depth() == 0) return;
 
-    currentLocals.markInitialized();
+    currScope.markTopLocalInitialized();
   }
 
   //defineVariable(int)
   private void defineVariable(int index) {
-    if (currentLocals.scopeDepth() > 0) {
+    if (currScope.depth() > 0) {
       //In the locals, a variable is "defined" when it
       //becomes available for use.
       markInitialized();
@@ -480,7 +481,7 @@ public class Compiler extends PropsObserver {
   //argumentList()
   public byte argumentList() {
     byte argCount = 0;
-    int maxSignedByte = properties.getInt("MAX_SIGNED_BYTE");
+    int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
 
     if (!check(TOKEN_RIGHT_PAREN))
       do {
@@ -510,25 +511,29 @@ public class Compiler extends PropsObserver {
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
   }
 
-  //function(CompilerLocals.FunctionType)
-  private void function(CompilerLocals.FunctionType type) {
-    int maxSignedByte = properties.getInt("MAX_SIGNED_BYTE");
-
-    CompilerLocals locals = new CompilerLocals(
-      currentLocals, type, maxSignedByte, parser.previous().lexeme()
+  //function(Function.FunctionType)
+  protected void function(Function.FunctionType type) {
+    int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
+    Scope scope = new Scope(
+      currScope, //enclosing Scope
+      type, //FunctionType
+      parser.previous().lexeme() //Function name
     );
-    currentLocals = locals;
 
-    beginScope(); 
+    currScope = scope;
+
+    beginScope();
 
     consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
 
     if (!check(TOKEN_RIGHT_PAREN))
       do {
-        locals.function().setArity(locals.function().arity() + 1);
+       scope.function().setArity(scope.function().arity() + 1);
 
-        if (locals.function().arity() > maxSignedByte)
+        if (scope.function().arity() > maxSignedByte)
           errorAtCurrent("Can't have more than " + maxSignedByte + " parameters.");
+
+        consume(TOKEN_TYPE, "Expect type for parameter.");
 
         int index = parseVariable("Expect parameter name.");
 
@@ -540,97 +545,40 @@ public class Compiler extends PropsObserver {
 
     block();
 
-    Function function = endCompilation(); //sets currentLocals to enclosing
+    Function function = endCompilation(true); //sets currScope to enclosing
 
+    //We're emitting into the Chunk in the enclosing scope now.
+    //Store the compiled function in the enclosing scope Chunk's
+    //constant table and emit the OpCode for the VM to build a Closure
+    //around it at runtime.
     emitByte(OP_CLOSURE);
     emitWord(makeConstant(function));
 
-    for (int i = 0; i < function.upvalueCount(); i++) {
-      emitByte((byte)(locals.getUpvalue(i).isLocal() ? 1 : 0));
-      emitByte((byte)(locals.getUpvalue(i).index()));
+    for (Upvalue upvalue : scope.upvalues()) {
+      emitByte((byte)(upvalue.isLocal() ? 1 : 0));
+      emitByte((byte)(upvalue.index()));
     }
 
-    //No endScope() needed because CompilerLocals is ended completely
+    //No endScope() needed because Scope is ended completely
     //at the end of the function body.
   }
 
-  //method()
-  private void method() {
-    consume(TOKEN_IDENTIFIER, "Expect method name.");
-
-    int constant = identifierConstant(parser.previous());
-
-    CompilerLocals.FunctionType type = TYPE_METHOD;
-
-    if (parser.previous().lexeme().equals("init"))
-      type = TYPE_INITIALIZER;
-
-    function(type);
-
-    emitByte(OP_METHOD);
-    emitWord(constant);
+  //inherit()
+  private void inherit() {
   }
 
-  //classDeclaration()
-  private void classDeclaration() {
-    consume(TOKEN_IDENTIFIER, "Expect class name.");
+  //typedDeclaration()
+  private void typedDeclaration() {
+    int index = parseVariable("Expect function or variable name.");
 
-    Token classToken = parser.previous();
-
-    int nameConstantIdx = identifierConstant(parser.previous());
-
-    declareVariable();
-
-    emitByte(OP_CLASS);
-    emitWord(nameConstantIdx);
-
-    defineVariable(nameConstantIdx);
-
-    currentClass = new CompilerClass(currentClass, false);
-
-    if (match(TOKEN_LESS)) {
-      consume(TOKEN_IDENTIFIER, "Expect superclass name.");
-
-      new VariableParselet().parse(this, false);
-
-      if (identifiersEqual(classToken, parser.previous()))
-        error("A class can't inherit from itself.");
-
-      beginScope();
-
-      addLocal(syntheticToken("super"));
-
-      defineVariable(0x00);
-
-      namedVariable(classToken, false);
-
-      emitByte(OP_INHERIT);
-
-      currentClass.setHasSuperclass(true);
-    }
-
-    //load class back onto the stack
-    namedVariable(classToken, false);
-
-    consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
-
-    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF))
-      method();
-
-    consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
-
-    emitByte(OP_POP);
-
-    if (currentClass.hasSuperclass())
-      endScope();
-
-    currentClass = currentClass.enclosing();
+    if (check(TOKEN_LEFT_PAREN))
+      funDeclaration(index);
+    else
+      varDeclaration(index);
   }
 
-  //funDeclaration()
-  private void funDeclaration() {
-    int globalIdx = parseVariable("Expect function name.");
-
+  //funDeclaration(int)
+  private void funDeclaration(int index) {
     //Function declaration's variable is marked "initialized"
     //before compiling the body so that the name can be
     //referenced inside the body without generating an error.
@@ -638,13 +586,11 @@ public class Compiler extends PropsObserver {
 
     function(TYPE_FUNCTION);
 
-    defineVariable(globalIdx);
-}
+    defineVariable(index);
+  }
 
-  //varDeclaration()
-  private void varDeclaration() {
-    int index = parseVariable("Expect variable name.");
-
+  //varDeclaration(int)
+  private void varDeclaration(int index) {
     if (match(TOKEN_EQUAL))
       expression();
     else
@@ -655,7 +601,9 @@ public class Compiler extends PropsObserver {
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
     if (match(TOKEN_COMMA)) {
-      varDeclaration();
+      int nextVarIndex = parseVariable("Expect variable name.");
+
+      varDeclaration(nextVarIndex);
 
       return;
     }
@@ -681,12 +629,14 @@ public class Compiler extends PropsObserver {
     //Initializer clause.
     if (match(TOKEN_SEMICOLON)) {
       // No initializer.
-    //} else if (match(TOKEN_VAR))
-    //  varDeclaration();
+    } else if (match(TOKEN_TYPE)) {
+      int index = parseVariable("Expect variable name.");
+
+      varDeclaration(index);
     } else
       expressionStatement();
 
-    int loopStart = currentChunk().codesCount();
+    int loopStart = currChunk().codes().size();
 
      //Condition clause.
     int exitJump = -1;
@@ -705,7 +655,7 @@ public class Compiler extends PropsObserver {
     //Increment clause.
     if (!match(TOKEN_RIGHT_PAREN)) {
       int bodyJump = emitJump(OP_JUMP);
-      int incrementStart = currentChunk().codesCount();
+      int incrementStart = currChunk().codes().size();
 
       expression();
 
@@ -760,26 +710,23 @@ public class Compiler extends PropsObserver {
 
   //returnStatement()
   private void returnStatement() {
-    if (currentLocals.type() == TYPE_SCRIPT)
+    if (currScope.function().type() == TYPE_SCRIPT)
       error("Can't return from top-level code.");
 
-    if (match(TOKEN_SEMICOLON)) //Return value is optional.
-      emitReturn();
-    else {
-      if (currentLocals.type() == TYPE_INITIALIZER)
-        error("Can't return a value from an initializer.");
-
+    if (match(TOKEN_SEMICOLON)) //no return value provided
+      emitByte(OP_NIL);
+    else { //handle return value
       expression();
 
       consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
-
-      emitByte(OP_RETURN);
     }
+
+    emitByte(OP_RETURN);
   }
 
   //whileStatement()
   private void whileStatement() {
-    int loopStart = currentChunk().codesCount();
+    int loopStart = currChunk().codes().size();
 
     consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
 
@@ -808,9 +755,7 @@ public class Compiler extends PropsObserver {
       if (parser.previous().type() == TOKEN_SEMICOLON) return;
 
       switch (parser.current().type()) {
-        //case TOKEN_CLASS:
-        //case TOKEN_FUN:
-        //case TOKEN_VAR:
+        case TOKEN_TYPE:
         case TOKEN_FOR:
         case TOKEN_IF:
         case TOKEN_WHILE:
@@ -826,14 +771,12 @@ public class Compiler extends PropsObserver {
   }
 
   //declaration()
-  private void declaration() {
-    //if (match(TOKEN_CLASS)) 
-    //  classDeclaration();
-    //else if (match(TOKEN_FUN))
-    //  funDeclaration();
-    //else if (match(TOKEN_VAR))
-    //  varDeclaration();
-    //else
+  protected void declaration() {
+    if (match(TOKEN_INHERIT))
+      inherit();
+    else if (match(TOKEN_TYPE))
+      typedDeclaration();
+    else
       statement();
 
     if (parser.panicMode())
@@ -890,19 +833,35 @@ public class Compiler extends PropsObserver {
     parser.setHadError(true);
   }
 
-  //registerTokens()
-  private void registerTokens() {
-    register(TOKEN_LEFT_PAREN,    new GroupingParselet(), new CallParselet(),  PREC_CALL);
-    register(TOKEN_RIGHT_PAREN,   null,                   null,                PREC_NONE);
+  //register(TokenType, Parselet, Parselet, int)
+  private void register(TokenType type, Parselet prefix, Parselet infix, int precedence) {
+    tokenTypeToRule.put(type, new ParseRule(prefix, infix, precedence));
+  }
+
+  //registerTokenTypesToRules()
+  private void registerTokenTypesToRules() {
+    //Column 1: TokenType
+    //Column 2: Parselet to use when TokenType appears as expression prefix
+    //Column 3: Parselet to use when TokenType appears as expression infix
+    //Column 4: Precedence to use when TokenType appears as expression infix
+    register(TOKEN_LEFT_PAREN,    new GroupingParselet(), new CallParselet(),   PREC_CALL);
+    register(TOKEN_RIGHT_PAREN,   null,                   null,                 PREC_NONE);
     register(TOKEN_LEFT_BRACE,    null,                   null,                 PREC_NONE);
     register(TOKEN_RIGHT_BRACE,   null,                   null,                 PREC_NONE);
     register(TOKEN_COMMA,         null,                   null,                 PREC_NONE);
     register(TOKEN_DOT,           null,                   new DotParselet(),    PREC_CALL);
+    register(TOKEN_INVOKE,        null,                   new InvokeParselet(), PREC_CALL);
     register(TOKEN_MINUS,         new UnaryParselet(),    new BinaryParselet(), PREC_TERM);
+    register(TOKEN_MINUS_EQUAL,   null,                   null,                 PREC_NONE);
+    register(TOKEN_MINUS_MINUS,   null,                   null,                 PREC_NONE);
     register(TOKEN_PLUS,          null,                   new BinaryParselet(), PREC_TERM);
+    register(TOKEN_PLUS_EQUAL,    null,                   null,                 PREC_NONE);
+    register(TOKEN_PLUS_PLUS,     null,                   null,                 PREC_NONE);
     register(TOKEN_SEMICOLON,     null,                   null,                 PREC_NONE);
     register(TOKEN_SLASH,         null,                   new BinaryParselet(), PREC_FACTOR);
+    register(TOKEN_SLASH_EQUAL,   null,                   null,                 PREC_NONE);
     register(TOKEN_STAR,          null,                   new BinaryParselet(), PREC_FACTOR);
+    register(TOKEN_STAR_EQUAL,    null,                   null,                 PREC_NONE);
     register(TOKEN_BANG,          new UnaryParselet(),    null,                 PREC_NONE);
     register(TOKEN_BANG_EQUAL,    null,                   new BinaryParselet(), PREC_EQUALITY);
     register(TOKEN_EQUAL,         null,                   null,                 PREC_NONE);
@@ -915,28 +874,32 @@ public class Compiler extends PropsObserver {
     register(TOKEN_STRING,        new StringParselet(),   null,                 PREC_NONE);
     register(TOKEN_NUMBER,        new NumberParselet(),   null,                 PREC_NONE);
     register(TOKEN_DBL_AMP,       null,                   new AndParselet(),    PREC_AND);
-    //register(TOKEN_CLASS,         null,                   null,                 PREC_NONE);
     register(TOKEN_ELSE,          null,                   null,                 PREC_NONE);
     register(TOKEN_FALSE,         new LiteralParselet(),  null,                 PREC_NONE);
     register(TOKEN_FOR,           null,                   null,                 PREC_NONE);
-    //register(TOKEN_FUN,           null,                   null,                 PREC_NONE);
     register(TOKEN_IF,            null,                   null,                 PREC_NONE);
+    register(TOKEN_INHERIT,       null,                   null,                 PREC_NONE);
     register(TOKEN_NIL,           new LiteralParselet(),  null,                 PREC_NONE);
     register(TOKEN_DBL_PIPE,      null,                   new OrParselet(),     PREC_OR);
     register(TOKEN_RETURN,        null,                   null,                 PREC_NONE);
     register(TOKEN_SUPER,         new SuperParselet(),    null,                 PREC_NONE);
     register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
     register(TOKEN_TRUE,          new LiteralParselet(),  null,                 PREC_NONE);
-    //register(TOKEN_VAR,           null,                   null,                 PREC_NONE);
+    register(TOKEN_TYPE,          null,                   null,                 PREC_NONE);
     register(TOKEN_WHILE,         null,                   null,                 PREC_NONE);
     register(TOKEN_ERROR,         null,                   null,                 PREC_NONE);
     register(TOKEN_EOF,           null,                   null,                 PREC_NONE);
   }
 
   //updateCachedProperties()
-  protected void updateCachedProperties() {
-    debugMaster = properties.getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && properties.getBool("DEBUG_PRINT_PROGRESS");
-    debugPrintCode = debugMaster && properties.getBool("DEBUG_PRINT_CODE");
+  private void updateCachedProperties() {
+    debugMaster = Props.instance().getBool("DEBUG_MASTER");
+    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
+    debugPrintComp = debugMaster && Props.instance().getBool("DEBUG_COMP");
+  }
+
+  //notifyPropertiesChanged()
+  public void notifyPropertiesChanged() {
+    updateCachedProperties();
   }
 }

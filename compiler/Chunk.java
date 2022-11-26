@@ -1,89 +1,77 @@
 package jbLPC.compiler;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Chunk {
-  private byte[] codes;
-  private int codesCapacity;
-  private int codesCount;
-  private Object[] constants;
-  private int constantsCapacity;
-  private int constantsCount;
-  private int[] lines;
+  private List<Byte> codes;
+  private List<Object> constants; //values known at compile time
+  private List<Integer> lines;
+  private List<String> separators;
 
   //Chunk()
-  Chunk() {
-    codes = new byte[0];
-    constants = new Object[0];
-    lines = new int[0];
-
-    codesCapacity = 0;
-    codesCount = 0;
-
-    constantsCapacity = 0;
-    constantsCount = 0;
+  public Chunk() {
+    codes = new ArrayList<>();
+    constants = new ArrayList<>();
+    lines = new ArrayList<>();
+    separators = new ArrayList<>();
   }
 
   //codes()
-  public byte[] codes() {
+  public List<Byte> codes() {
     return codes;
   }
 
-  //codesCount()
-  public int codesCount() {
-    return codesCount;
-  }
-
   //constants()
-  public Object[] constants() {
+  public List<Object> constants() {
     return constants;
   }
 
   //lines()
-  public int[] lines() {
+  public List<Integer> lines() {
     return lines;
   }
 
-  //writeCode(byte, int)
-  void writeCode(byte code, int line) {
-    if (codesCapacity < codesCount + 1) {
-      //grow capacity
-      codesCapacity = codesCapacity < 8 ? 8 : codesCapacity * 2;
-
-      byte[] newCodes = new byte[codesCapacity];
-      int[] newLines = new int[codesCapacity];
-
-      //copy elements into new, larger array
-      System.arraycopy(codes, 0, newCodes, 0, codesCount);
-      System.arraycopy(lines, 0, newLines, 0, codesCount);
-
-      codes = newCodes;
-      lines = newLines;
-    }
-
-    codes[codesCount] = code;
-    lines[codesCount] = line;
-
-    codesCount++;
+  //insertByte(int, byte)
+  public void insertByte(int index, byte b) {
+    codes.add(index, b);
+    lines.add(lines.get(index));
+    separators.add(index, ", ");
   }
 
-  //writeConstant(Object)
-  int writeConstant(Object constant) {
-    if (constantsCapacity < constantsCount + 1) {
-      //grow capacity
-      constantsCapacity = constantsCapacity < 8 ? 8 : constantsCapacity * 2;
+  //writeByte(byte, int)
+  public void writeByte(byte b, int line) {
+    codes.add(b);
+    lines.add(line);
+    separators.add(", ");
+  }
 
-      Object[] newConstants = new Object[constantsCapacity];
+  //writeWord(byte, byte, int)
+  public void writeWord(byte b1, byte b2, int line) {
+    codes.add(b1);
+    lines.add(line);
+    separators.add("-");
 
-      //copy elements into new, larger array
-      System.arraycopy(constants, 0, newConstants, 0, constantsCount);
+    codes.add(b2);
+    lines.add(line);
+    separators.add(", ");
+  }
 
-      constants = newConstants;
+  //printCodes()
+  public String printCodes() {
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("[");
+
+    for (int i = 0; i < codes.size(); i++) {
+      sb.append(String.format("%02X", codes.get(i)));
+
+      if (i < codes.size() - 1)
+        sb.append(separators.get(i));
     }
 
-    constants[constantsCount] = constant;
+    sb.append("]");
 
-    constantsCount++;
-
-    //return index of newly written constant
-    return constantsCount - 1;
+    return sb.toString();
   }
 }

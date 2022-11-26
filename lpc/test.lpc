@@ -1,0 +1,6 @@
+//This is a test file.
+println("Hello, world!");
+#include "test2.lpc"
+print(FOO);
+#define FOO 99
+println(FOO + 2);

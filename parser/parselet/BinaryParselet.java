@@ -59,6 +59,8 @@ public class BinaryParselet implements Parselet {
         compiler.emitByte(OP_DIVIDE);
 
         break;
+      case TOKEN_PLUS_EQUAL:
+        break;
       default:  //Unreachable
         return;
     }

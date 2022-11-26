@@ -1,7 +1,10 @@
 package jbLPC.compiler;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public final class OpCode {
-  public static final byte OP_CONSTANT      = 0x00;
+  public static final byte OP_GET_CONSTANT  = 0x00;
   public static final byte OP_NIL           = 0x01;
   public static final byte OP_TRUE          = 0x02;
   public static final byte OP_FALSE         = 0x03;
@@ -25,7 +28,6 @@ public final class OpCode {
   public static final byte OP_DIVIDE        = 0x15;
   public static final byte OP_NOT           = 0x16;
   public static final byte OP_NEGATE        = 0x17;
-  public static final byte OP_PRINT         = 0x18;
   public static final byte OP_JUMP          = 0x19;
   public static final byte OP_JUMP_IF_FALSE = 0x1A;
   public static final byte OP_LOOP          = 0x1B;
@@ -35,9 +37,11 @@ public final class OpCode {
   public static final byte OP_CLOSURE       = 0x1F;
   public static final byte OP_CLOSE_UPVALUE = 0x20;
   public static final byte OP_RETURN        = 0x21;
-  public static final byte OP_CLASS         = 0x22;
-  public static final byte OP_INHERIT       = 0x23;
-  public static final byte OP_METHOD        = 0x24;
+  public static final byte OP_INHERIT       = 0x22;
+  public static final byte OP_METHOD        = 0x23;
+  public static final byte OP_OBJECT        = 0x24;
+  public static final byte OP_DEFINE_FIELD  = 0x25;
+  public static final byte OP_DEFINE_METHOD = 0x26;
 
   //OpCode()
   private OpCode() {}

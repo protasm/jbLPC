@@ -14,8 +14,28 @@ public final class Props {
   private Properties properties;
   private List<PropsObserver> observers;
 
-  //Props(String)
-  public Props(String propsFile) {
+  static private Props _instance; //singleton
+
+  //Props()
+  private Props() {
+    observers = new ArrayList<>();
+  }
+
+  //instance()
+  public static Props instance() {
+    if (_instance == null) {
+      //critical section
+      synchronized(Props.class) {
+        if (_instance == null)
+          _instance = new Props();
+      }
+    }
+
+    return _instance;
+  }
+
+  //open(String)
+  public void open(String propsFile) {
     this.propsFile = propsFile;
 
     try (InputStream input = new FileInputStream(propsFile)) {
@@ -27,17 +47,10 @@ public final class Props {
     } catch (IOException e) {
       System.err.println("Failed to load properties file '" + propsFile + "'.");
     }
-
-    observers = new ArrayList<>();
   }
 
   //close()
   public void close() {
-    store();
-  }
-
-  //store()
-  private void store() {
     try (OutputStream out = new FileOutputStream(propsFile)) {
       properties.store(out, "---No Comment---");
 
@@ -45,6 +58,11 @@ public final class Props {
     } catch (IOException e) {
       System.err.println("Failed to store properties file '" + propsFile + "'.");
     }
+  }
+
+  //getStatus(String)
+  public String getStatus(String key) {
+    return getBool(key) ? "ON" : "OFF";
   }
 
   //getBool(String)
@@ -60,7 +78,7 @@ public final class Props {
 
     properties.setProperty(key, String.valueOf(newState));
 
-    store();
+    close();
 
     for (PropsObserver observer : observers)
       observer.notifyPropertiesChanged();
@@ -81,8 +99,15 @@ public final class Props {
     }
   }
 
+  //getString(String)
+  public String getString(String key) {
+    return properties.getProperty(key);
+  }
+
   //registerObserver(PropsObserver)
   public void registerObserver(PropsObserver observer) {
     observers.add(observer);
+
+    observer.notifyPropertiesChanged();
   }
 }

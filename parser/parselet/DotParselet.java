@@ -11,7 +11,7 @@ public class DotParselet implements Parselet {
   public void parse(jbLPC.compiler.Compiler compiler, boolean canAssign) {
     compiler.consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
 
-    int nameIdx = compiler.identifierConstant(compiler.parser().previous());
+    int nameIdx = compiler.makeConstant(compiler.parser().previous().lexeme());
 
     if (canAssign && compiler.match(TOKEN_EQUAL)) {
       compiler.expression();

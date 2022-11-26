@@ -1,0 +1,6 @@
+int x = 1;
+void foo(string x) { println(x); }
+foo(99);
+foo("hi");
+string y = "y";
+x = x->remove_link(y);

@@ -1,14 +1,18 @@
 package jbLPC.vm;
 
 import java.lang.Math;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Stack;
 
 import jbLPC.compiler.Chunk;
 import jbLPC.compiler.Compiler;
 import jbLPC.compiler.Function;
 import jbLPC.compiler.HasArity;
+import jbLPC.compiler.ObjectCompiler;
+import jbLPC.compiler.OpCode;
+import jbLPC.compiler.ScriptCompiler;
 import jbLPC.debug.Debugger;
 import jbLPC.main.Props;
 import jbLPC.main.PropsObserver;
@@ -16,7 +20,7 @@ import jbLPC.nativefn.*;
 
 import static jbLPC.compiler.OpCode.*;
 
-public class VM extends PropsObserver {
+public class VM implements PropsObserver {
   //InterpretResult
   public enum InterpretResult {
     INTERPRET_OK,
@@ -34,14 +38,12 @@ public class VM extends PropsObserver {
     OPERATION_LT,
   }
 
-  private Compiler compiler;
   private Map<String, Object> globals;
-  private Object[] vStack; //Value stack
-  private int vStackCount;
-  private CallFrame[] fStack; //Frame stack
-  private int fStackCount;
-  private String initString;
+  private Stack<Object> vStack; //Value stack
+  private Stack<CallFrame> fStack; //CallFrame stack
   private Upvalue openUpvalues; //linked list
+
+  private static final String initString = "init";
 
   //Cached properties
   private boolean debugMaster;
@@ -49,445 +51,100 @@ public class VM extends PropsObserver {
   private boolean debugTraceExecution;
 
   //VM()
-  public VM(Props properties, Debugger debugger) {
-    super(properties, debugger);
+  public VM() {
+    Props.instance().registerObserver(this);
 
-    if (debugPrintProgress) debugger.printProgress("Initializing VM....");
-
-    compiler = new Compiler(properties, debugger);
     globals = new HashMap<>();
-    vStack = new Object[properties.getInt("MAX_STACK")];
-    fStack = new CallFrame[properties.getInt("MAX_FRAMES")];
-    initString = "init";
 
-    defineNativeFn("clock", new NativeClock());
-    defineNativeFn("foo", new NativeFoo());
-    defineNativeFn("print", new NativePrint());
-    defineNativeFn("println", new NativePrintLn());
+    defineNativeFn("clock", new NativeClock(this, "Clock", 0));
+    defineNativeFn("foo", new NativeFoo(this, "Foo", 3));
+    defineNativeFn("print", new NativePrint(this, "Print", 1));
+    defineNativeFn("println", new NativePrintLn(this, "PrintLn", -1)); //variadic, 0 or 1 args
+    defineNativeFn("load_object", new NativeLoadObject(this, "LoadObject", 1));
 
-    reset();
-  }
+    reset(); //vStack, fStack, openUpvalues
 
-  //fStackTop()
-  private int fStackTop() {
-    return fStackCount - 1;
-  }
-
-  //getFrame(int)
-  private CallFrame getFrame(int index) {
-    return fStack[index];
-  }
-
-  //peekFrame()
-  private CallFrame peekFrame() {
-    return fStack[fStackCount - 1];
-  }
-
-  //popFrame()
-  private CallFrame popFrame() {
-    return fStack[(fStackCount--) - 1];
-  }
-
-  //pushFrame(CallFrame)
-  private void pushFrame(CallFrame frame) {
-    fStack[fStackCount++] = frame;
-  }
-
-  //vStackTop()
-  private int vStackTop() {
-    return vStackCount - 1;
-  }
-
-  //getValue(int)
-  private Object getValue(int index) {
-    return vStack[index];
-  }
-
-  //peekValue()
-  private Object peekValue() {
-    return vStack[vStackCount - 1];
-  }
-
-  //peekNValues(int)
-  private Object peekNValues(int n) {
-    return vStack[vStackCount - n];
-  }
-
-  //popValue()
-  private Object popValue() {
-    return vStack[(vStackCount--) - 1];
-  }
-
-  //pushValue(Object)
-  private void pushValue(Object value) {
-    vStack[vStackCount++] = value;
-  }
-
-  //setValue(int, Object)
-  private void setValue(int index, Object value) {
-    vStack[index] = value;
-  }
-
-  //reset()
-  private void reset() {
-    vStackCount = 0;
-    fStackCount = 0;
-    openUpvalues = null;
-  }
-
-  //runtimeError(String, String...)
-  void runtimeError(String message, String... args) {
-    System.err.println("Runtime Error: " + message);
-
-    for (String s : args)
-      System.err.println(s);
-
-    for (int i = fStackTop(); i >= 0; i--) {
-      CallFrame frame = getFrame(i);
-      Function function = frame.closure().function();
-      int[] lines = function.chunk().lines();
-      int line = lines[frame.ip() - 1];
-
-      System.err.print("[line " + line + "] in ");
-
-      if (function.name() == null)
-        System.err.print("script.\n");
-      else
-        System.err.print(function.name() + "().\n");
-    }
-
-    reset();
-  }
-
-  //defineNativeFn(String, NativeFn)
-  private void defineNativeFn(String name, NativeFn nativeFn) {
-    globals.put(name, nativeFn);
-  }
-
-  //call(Closure, int)
-  private boolean call(Closure closure, int argCount) {
-    if (!checkArity(closure.function(), argCount))
-      return false;
-
-    //CallFrame window on VM vStack begins at slot
-    //occupied by function.
-    int base = vStackTop() - argCount;
-    int maxFrames = properties.getInt("MAX_FRAMES");
-
-    if (fStackCount == maxFrames) {
-      runtimeError("Stack overflow.");
-
-      return false;
-    }
-
-    pushFrame(new CallFrame(closure, base));
-
-    return true;
-  }
-
-  //callValue(Object, int)
-  private boolean callValue(Object callee, int argCount) {
-    //Bound Method
-    if (callee instanceof BoundMethod) {
-      BoundMethod bound = (BoundMethod)callee;
-
-      setValue(vStackCount - argCount, bound.receiver());
-
-      return call(bound.method(), argCount);
-    //Class
-    } else if (callee instanceof LoxClass) {
-      LoxClass klass = (LoxClass)callee;
-      LoxInstance instance = new LoxInstance(klass);
-
-      setValue(vStackTop() - argCount, instance);
-
-      Closure initializer = klass.methods().get(initString);
-
-      if (initializer != null)
-        return call(initializer, argCount);
-      else if (argCount != 0) {
-        runtimeError("Expected 0 arguments but got " + argCount + ".");
-
-        return false;
-      }
-
-      return true;
-    //Closure
-    } else if (callee instanceof Closure)
-      return call((Closure)callee, argCount);
-    //Native Function
-    else if (callee instanceof NativeFn) {
-      NativeFn nativeFn = (NativeFn)callee;
-
-      if (!checkArity(nativeFn, argCount))
-        return false;
-
-      Object[] args = new Object[argCount];
-
-      for (int i = 0; i < argCount; i++)
-        args[i] = peekNValues(argCount - i);
-
-      Object result = nativeFn.execute(args);
-
-      //pop args plus native function
-      vStackCount = vStackTop() - argCount;
-
-      pushValue(result);
-
-      return true;
-    }
-
-    runtimeError("Can only call functions and classes.");
-
-    return false;
-  }
-
-  //invokeFromClass(LoxClass, String, int)
-  private boolean invokeFromClass(LoxClass klass, String name, int argCount) {
-    if (!(klass.methods().containsKey(name))) {
-      runtimeError("Undefined property '" + name + "'.");
-
-      return false;
-    }
-
-    Closure method = klass.methods().get(name);
-
-    return call(method, argCount);
-  }
-
-  //invoke(String, int)
-  private boolean invoke(String name, int argCount) {
-    Object receiver = peekNValues(argCount + 1);
-
-    if (!(receiver instanceof LoxInstance)) {
-      runtimeError("Only instances have methods.");
-
-      return false;
-    }
-
-    LoxInstance instance = (LoxInstance)receiver;
-
-    if (instance.fields().containsKey(name)) {
-      Object value = instance.fields().get(name);
-
-      setValue(vStackTop() - argCount, value);
-
-      return callValue(value, argCount);
-    }
-
-    return invokeFromClass(instance.klass(), name, argCount);
-  }
-
-  //bindMethod(LoxClass, String)
-  private boolean bindMethod(LoxClass klass, String name) {
-    if (!klass.methods().containsKey(name)) {
-      runtimeError("Undefined property '" + name + "'.");
-
-      return false;
-    }
-
-    Closure method = klass.methods().get(name);
-    BoundMethod bound = new BoundMethod(peekValue(), method);
-    Object value = bound;
-
-    popValue();
-
-    pushValue(value);
-
-    return true;
-  }
-
-  //captureUpvalue(int)
-  Upvalue captureUpvalue(int location) {
-    Upvalue prevUpvalue = null;
-    Upvalue currUpvalue = openUpvalues; //start at head of list
-
-    while (currUpvalue != null && currUpvalue.location() > location) {
-      prevUpvalue = currUpvalue;
-
-      currUpvalue = currUpvalue.next();
-    }
-
-    if (currUpvalue != null && currUpvalue.location() == location)
-      return currUpvalue;
-
-    //create new Upvalue and insert into linked list of
-    //open upvalues between previous and current
-    Upvalue createdUpvalue = new Upvalue(location);
-
-    createdUpvalue.setNext(currUpvalue);
-
-    if (prevUpvalue == null)
-      openUpvalues = createdUpvalue; //new head of list
-    else
-      prevUpvalue.setNext(createdUpvalue); //insert into list
-
-    return createdUpvalue;
-  }
-
-  //closeUpvalues(int)
-  void closeUpvalues(int last) {
-    while (openUpvalues != null && openUpvalues.location() >= last) {
-      Upvalue upvalue = openUpvalues;
-
-      upvalue.setClosedValue(getValue(upvalue.location()));
-      upvalue.setLocation(-1);
-
-      //after upvalue is closed, reset head of linked list
-      //to next upvalue
-      openUpvalues = upvalue.next();
-      upvalue.setNext(null);
-    }
-  }
-
-  //defineMethod(String)
-  void defineMethod(String name) {
-    Closure method = (Closure)peekValue();
-    LoxClass klass = (LoxClass)peekNValues(2);
-
-    klass.methods().put(name, method);
-
-    popValue();
-  }
-
-  //isFalsey(Object)
-  boolean isFalsey(Object value) {
-    //nil and false are falsey and every other value behaves like true.
-    return value == null || (value instanceof Boolean && !(boolean)value);
-  }
-
-  //concatenate()
-  private void concatenate() {
-    String b = (String)popValue();
-    String a = (String)popValue();
-
-    pushValue(a + b);
-  }
-
-  //equate()
-  private void equate() {
-    Object b = popValue();
-    Object a = popValue();
-
-    if (a == null)
-      pushValue(b == null);
-    else
-      pushValue(a.equals(b));
+    if (debugPrintProgress) Debugger.instance().printProgress("VM initialized.");
   }
 
   //interpret(String)
   public InterpretResult interpret(String source) {
-    Function function = compiler.compile(source);
-
-    if (debugPrintProgress)
-      debugger.printProgress("Executing....");
+    Compiler compiler = new ScriptCompiler();
+    Function function = compiler.compile("script", source);
 
     if (function == null)
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
+    if (debugPrintProgress)
+      Debugger.instance().printProgress("Executing....");
+
     Closure closure = new Closure(function);
-    Object value = closure;
 
-    pushValue(value);
+    vStack.push(closure);
 
-    call(closure, 0);
+    call(closure, 0); //pushes new CallFrame on fStack
 
     return run();
   }
 
-  //readByte(CallFrame)
-  private byte readByte(CallFrame frame) {
-    return (byte)frame.closure().function().chunk().codes()[frame.getAndIncrementIP()];
-  }
-
-  //readWord(CallFrame)
-  private short readWord(CallFrame frame) {
-    byte hi = readByte(frame);
-    byte lo = readByte(frame);
-
-    short s = (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
-
-    return s;
-  }
-
-  //readConstant(CallFrame)
-  private Object readConstant(CallFrame frame) {
-    short index = readWord(frame);
-
-    return frame.closure().function().chunk().constants()[index];
-  }
-
-  //readString(CallFrame)
-  private String readString(CallFrame frame) {
-    return (String)readConstant(frame);
-  }
-
   //run()
   private InterpretResult run() {
-    CallFrame frame = peekFrame();
+    CallFrame frame = fStack.peek();
 
     //Bytecode dispatch loop.
     for (;;) {
-      if (debugTraceExecution) {
-        Object[] substack = Arrays.copyOfRange(vStack, 0, vStackCount);
+      if (debugTraceExecution)
+        Debugger.instance().traceExecution(frame, globals, vStack.toArray());
 
-        debugger.traceExecution(frame, globals, substack);
-      }
+      byte opCode = readChunkCodeByte(frame);
 
-      switch (readByte(frame)) {
-        case OP_CONSTANT:
-          pushValue(readConstant(frame));
+      switch (opCode) {
+        case OP_GET_CONSTANT:
+          Object constVal = readChunkConstant(frame);
 
-          break;
-        case OP_NIL:
-          pushValue(null);
+          vStack.push(constVal);
 
           break;
-        case OP_TRUE:
-          pushValue(true);
-
-          break;
-        case OP_FALSE:
-          pushValue(false);
-
-          break;
-        case OP_POP:
-          popValue();
-
-          break;
+        case OP_NIL:   vStack.push(null);  break;
+        case OP_TRUE:  vStack.push(true);  break;
+        case OP_FALSE: vStack.push(false); break;
+        case OP_POP:   vStack.pop();       break;
         case OP_GET_LOCAL:
-          short glSlot = readWord(frame);
+          short glOffset = readChunkCodeWord(frame);
+          Object glValue = vStack.get(frame.base() + glOffset);
 
-          pushValue(getValue(frame.base() + glSlot));
+          vStack.push(glValue);
 
           break;
         case OP_SET_LOCAL:
-          short slSlot = readWord(frame);
+          short slOffset = readChunkCodeWord(frame);
+          Object slValue = vStack.peek();
 
-          setValue(frame.base() + slSlot, peekValue());
+          vStack.set(frame.base() + slOffset, slValue);
 
           break;
         case OP_GET_GLOBAL:
-          String ggKey = readString(frame);
+          String ggKey = readChunkConstantAsString(frame);
 
           if (!globals.containsKey(ggKey))
             return error("Undefined variable '" + ggKey + "'.");
 
           Object global = globals.get(ggKey);
 
-          pushValue(global);
+          vStack.push(global);
 
           break;
         case OP_DEFINE_GLOBAL:
-          String dgKey = readString(frame);
+          String dgKey = readChunkConstantAsString(frame);
+          Object dgValue = vStack.peek();
 
-          globals.put(dgKey, peekValue());
+          globals.put(dgKey, dgValue);
 
-          popValue();
+          vStack.pop();
 
           break;
         case OP_SET_GLOBAL:
-          String sgKey = readString(frame);
+          String sgKey = readChunkConstantAsString(frame);
 
           if (!globals.containsKey(sgKey))
             return error("Undefined variable '" + sgKey + "'.");
@@ -495,31 +152,31 @@ public class VM extends PropsObserver {
           //Peek here, not pop; assignment is an expression,
           //so we leave value vStacked in case the assignment
           //is nested inside a larger expression.
-          globals.put(sgKey, peekValue());
+          globals.put(sgKey, vStack.peek());
 
           break;
         case OP_GET_UPVALUE:
-          short guSlot = readWord(frame);
+          short guSlot = readChunkCodeWord(frame);
           Upvalue guUpvalue = frame.closure().upvalues()[guSlot];
 
           if (guUpvalue.location() != -1) //i.e., open
-            pushValue(getValue(guUpvalue.location()));
+            vStack.push(vStack.get(guUpvalue.location()));
           else //i.e., closed
-            pushValue(guUpvalue.closedValue());
+           vStack.push(guUpvalue.closedValue());
 
           break;
         case OP_SET_UPVALUE:
-          short suSlot = readWord(frame);
+          short suSlot = readChunkCodeWord(frame);
           Upvalue suUpvalue = frame.closure().upvalues()[suSlot];
 
           if (suUpvalue.location() != -1) //i.e., open
-            setValue(suUpvalue.location(), peekValue());
+            vStack.set(suUpvalue.location(), vStack.peek());
           else //i.e., closed
-            suUpvalue.setClosedValue(peekValue());
+            suUpvalue.setClosedValue(vStack.peek());
 
           break;
         case OP_GET_PROPERTY:
-          Object gpValue = peekValue();
+          Object gpValue = vStack.peek();
 
           if (!(gpValue instanceof LoxInstance)) {
             runtimeError("Only instances have properties.");
@@ -528,12 +185,12 @@ public class VM extends PropsObserver {
           }
 
           LoxInstance gpInstance = (LoxInstance)gpValue;
-          String name = readString(frame);
+          String name = readChunkConstantAsString(frame);
 
           if (gpInstance.fields().containsKey(name)) {
-            popValue(); // Instance.
+            vStack.pop(); // Instance.
 
-            pushValue(gpInstance.fields().get(name));
+            vStack.push(gpInstance.fields().get(name));
 
             break;
           }
@@ -543,29 +200,31 @@ public class VM extends PropsObserver {
 
           break;
         case OP_SET_PROPERTY:
-          Object spValue = peekNValues(2);
+          Object spValue = vStack.get(vStack.size() - 2);
 
-          if (!(spValue instanceof LoxInstance)) {
-            runtimeError("Only instances have fields.");
+          if (!(spValue instanceof LPCObject)) {
+            runtimeError("Only objects have properties.");
 
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
 
-          LoxInstance spInstance = (LoxInstance)spValue;
+          LPCObject spObject = (LPCObject)spValue;
 
-          spInstance.fields().put(readString(frame), peekValue());
+          String spPropertyName = readChunkConstantAsString(frame);
+          spObject.fields().put(spPropertyName, vStack.peek());
 
           //pop value that was set plus instance object
-          Object setObject = popValue();
-          popValue();
+          Object propertyValue = vStack.pop();
+          vStack.pop(); //instance
 
-          //push value back on vStack
-          pushValue(setObject);
+          //push value back on vStack (because assignment is an expression)
+          vStack.push(propertyValue);
 
           break;
+        case OP_DEFINE_FIELD:
         case OP_GET_SUPER:
-          String gsName = readString(frame);
-          LoxClass gsSuperclass = (LoxClass)popValue();
+          String gsName = readChunkConstantAsString(frame);
+          LoxClass gsSuperclass = (LoxClass)vStack.pop();
 
           if (!bindMethod(gsSuperclass, gsName))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -620,79 +279,75 @@ public class VM extends PropsObserver {
 
           break;
         case OP_NOT:
-          pushValue(isFalsey(popValue()));
+          vStack.push(isFalsey(vStack.pop()));
 
           break;
         case OP_NEGATE:
           if (!oneNumericOperand())
             return errorOneNumber();
 
-          pushValue(-(double)popValue());
+          vStack.push(-(double)vStack.pop());
 
           break;
-        //case OP_PRINT:
-        //  System.out.println(popValue());
-
-        //  break;
         case OP_JUMP:
-          short jumpOffset = readWord(frame);
+          short jumpOffset = readChunkCodeWord(frame);
 
           frame.setIP(frame.ip() + jumpOffset);
 
           break;
         case OP_JUMP_IF_FALSE:
-          short jumpIfFalseOffset = readWord(frame);
+          short jumpIfFalseOffset = readChunkCodeWord(frame);
 
-          if (isFalsey(peekValue()))
+          if (isFalsey(vStack.peek()))
             frame.setIP(frame.ip() + jumpIfFalseOffset);
 
           break;
         case OP_LOOP:
-          short loopOffset = readWord(frame);
+          short loopOffset = readChunkCodeWord(frame);
 
           frame.setIP(frame.ip() - loopOffset);
 
           break;
         case OP_CALL:
-          int callArgCount = readByte(frame);
-          Object callee = getValue(vStackTop() - callArgCount);
+          int callArgCount = readChunkCodeByte(frame);
+          Object callee = vStack.get(vStack.size() - 1 - callArgCount);
 
           if (!callValue(callee, callArgCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          frame = peekFrame();
+          frame = fStack.peek();
 
           break;
         case OP_INVOKE:
-          String invMethod = readString(frame);
-          int invArgCount = readByte(frame);
+          String invMethod = readChunkConstantAsString(frame);
+          int invArgCount = readChunkCodeByte(frame);
 
           if (!invoke(invMethod, invArgCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          frame = peekFrame();
+          frame = fStack.peek();
 
           break;
         case OP_SUPER_INVOKE:
-          String siMethod = readString(frame);
-          int siArgCount = readByte(frame);
-          LoxClass siSuperclass = (LoxClass)popValue();
+          String siMethod = readChunkConstantAsString(frame);
+          int siArgCount = readChunkCodeByte(frame);
+          LoxClass siSuperclass = (LoxClass)vStack.pop();
 
           if (!invokeFromClass(siSuperclass, siMethod, siArgCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          frame = peekFrame();
+          frame = fStack.peek();
 
           break;
         case OP_CLOSURE:
-          Function function = (Function)readConstant(frame);
+          Function function = (Function)readChunkConstant(frame);
           Closure closure = new Closure(function);
 
-          pushValue(closure);
+          vStack.push(closure);
 
           for (int i = 0; i < closure.upvalueCount(); i++) {
-            byte isLocal = readByte(frame);
-            byte index = readByte(frame);
+            byte isLocal = readChunkCodeByte(frame);
+            byte index = readChunkCodeByte(frame);
 
             if (isLocal != 0)
               closure.upvalues()[i] = captureUpvalue(frame.base() + index);
@@ -703,40 +358,47 @@ public class VM extends PropsObserver {
           break;
         case OP_CLOSE_UPVALUE:
           //close the upvalue at the top of the vStack
-          closeUpvalues(vStackTop());
+          closeUpvalues(vStack.size() - 1);
 
-          popValue();
+          vStack.pop();
 
           break;
         case OP_RETURN:
-          Object result = popValue();
+          //We're about to discard the called function's entire
+          //stack window, so pop the function's return value but
+          //hold onto a reference to it.
+          Object result = vStack.pop();
 
           closeUpvalues(frame.base());
 
-          popFrame();
+          //discard the CallFrame for the returning function
+          fStack.pop();
 
-          if (fStackCount == 0) {
-            popValue();
+          if (fStack.size() == 0) { //entire program finished
+            vStack.pop();
 
+            //exit the bytecode dispatch loop
             return InterpretResult.INTERPRET_OK;
           }
 
-          vStackCount = frame.base();
+          //pop the vStack back to CallFrame base
+          while (vStack.size() > frame.base())
+            vStack.pop();
 
-          pushValue(result);
+          vStack.push(result);
 
-          frame = peekFrame();
+          frame = fStack.peek();
 
           break;
-        case OP_CLASS:
-          LoxClass classLoxClass = new LoxClass(readString(frame));
-          Object classVal = classLoxClass;
+        case OP_OBJECT:
+          String objName = readChunkConstantAsString(frame);
+          LPCObject lpcObject = new LPCObject(objName);
 
-          pushValue(classVal);
+          vStack.push(lpcObject);
 
           break;
         case OP_INHERIT:
-          Object superclass = peekNValues(2);
+          Object superclass = vStack.get(vStack.size() - 2);
 
           if (!(superclass instanceof LoxClass)) {
             runtimeError("Superclass must be a class.");
@@ -744,24 +406,322 @@ public class VM extends PropsObserver {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
 
-          LoxClass subclass = (LoxClass)peekValue();
+          LoxClass subclass = (LoxClass)vStack.peek();
 
           subclass.inheritMethods(((LoxClass)superclass).methods());
 
-          popValue(); // Subclass.
+          vStack.pop(); // Subclass.
 
           break;
         case OP_METHOD:
-          defineMethod(readString(frame));
+          String methodName = readChunkConstantAsString(frame);
+          Closure method = (Closure)vStack.peek();
+          LoxClass klass = (LoxClass)vStack.get(vStack.size() - 2);
+
+          klass.methods().put(methodName, method);
+
+          vStack.pop();
+
+          break;
+        case OP_DEFINE_METHOD:
+          String objMethodName = readChunkConstantAsString(frame);
+          Closure objMethod = (Closure)vStack.peek();
+          LPCObject obj = (LPCObject)vStack.get(vStack.size() - 2);
+
+          obj.methods().put(objMethodName, objMethod);
+
+          vStack.pop();
 
           break;
       } //switch
     } //for(;;)
   }
 
+  //reset()
+  private void reset() {
+    vStack = new Stack<Object>();
+    fStack = new Stack<CallFrame>();
+    openUpvalues = null;
+  }
+
+  //runtimeError(String, String...)
+  void runtimeError(String message, String... args) {
+    System.err.println("Runtime Error: " + message);
+
+    for (String s : args)
+      System.err.println(s);
+
+    //loop through CallFrames on fStack in reverse order
+    for (int i = fStack.size() - 1; i >=0; i--) {
+      CallFrame frame = fStack.get(i);
+      Function function = frame.closure().function();
+      int line = function.chunk().lines().get(frame.ip() - 1);
+
+      System.err.print("[line " + line + "] in ");
+
+      if (function.name() == null)
+        System.err.print("script.\n");
+      else
+        System.err.print(function.name() + "().\n");
+    }
+
+    reset(); // vStack, fStack, openUpvalues
+  }
+
+  //defineNativeFn(String, NativeFn)
+  private void defineNativeFn(String name, NativeFn nativeFn) {
+    globals.put(name, nativeFn);
+  }
+
+  //loadObject(String, String)
+  public Object loadObject(String name, String source) {
+    Compiler compiler = new ObjectCompiler();
+    Function function = compiler.compile(name, source);
+
+    return new Closure(function);
+  }
+
+  //syntheticInstruction(byte)
+  public void syntheticInstruction(byte b) {
+    CallFrame frame = fStack.peek();
+    Chunk chunk = frame.closure().function().chunk();
+
+    chunk.insertByte(frame.ip(), b);
+  }
+
+  //call(Closure, int)
+  private boolean call(Closure closure, int argCount) {
+    if (!checkArity(closure.function(), argCount))
+      return false;
+
+    if (fStack.size() == Props.instance().getInt("MAX_FRAMES")) {
+      runtimeError("Stack overflow.");
+
+      return false;
+    }
+
+    //CallFrame window on VM vStack begins at slot
+    //occupied by function.
+    int base = vStack.size() - 1 - argCount;
+
+    fStack.push(new CallFrame(closure, base));
+
+    return true;
+  }
+
+  //callValue(Object, int)
+  private boolean callValue(Object callee, int argCount) {
+    //Bound Method
+    if (callee instanceof BoundMethod) {
+      BoundMethod bound = (BoundMethod)callee;
+
+      vStack.set(vStack.size() - 1 - argCount, bound.receiver());
+
+      return call(bound.method(), argCount);
+    //Class
+    } else if (callee instanceof LoxClass) {
+      LoxClass klass = (LoxClass)callee;
+      LoxInstance instance = new LoxInstance(klass);
+
+      vStack.set(vStack.size() - 1 - argCount, instance);
+
+      Closure initializer = klass.methods().get(initString);
+
+      if (initializer != null)
+        return call(initializer, argCount);
+      else if (argCount != 0) {
+        runtimeError("Expected 0 arguments but got " + argCount + ".");
+
+        return false;
+      }
+
+      return true;
+    //Closure
+    } else if (callee instanceof Closure)
+      return call((Closure)callee, argCount);
+    //Native Function
+    else if (callee instanceof NativeFn) {
+      NativeFn nativeFn = (NativeFn)callee;
+
+      if (!checkArity(nativeFn, argCount))
+        return false;
+
+      List<Object> args = vStack.subList(vStack.size() - argCount, vStack.size());
+      Object result = nativeFn.execute(args.toArray());
+
+      //pop args plus native function
+      for (int i = 0; i < argCount + 1; i++)
+        vStack.pop();
+
+      vStack.push(result);
+
+      //if (result instanceof Closure)
+        //return call((Closure)result, 0);
+
+      return true;
+    }
+
+    runtimeError("Can only call functions and classes.");
+
+    return false;
+  }
+
+  //invokeFromClass(LoxClass, String, int)
+  private boolean invokeFromClass(LoxClass klass, String name, int argCount) {
+    if (!(klass.methods().containsKey(name))) {
+      runtimeError("Undefined property '" + name + "'.");
+
+      return false;
+    }
+
+    Closure method = klass.methods().get(name);
+
+    return call(method, argCount);
+  }
+
+  //invoke(String, int)
+  private boolean invoke(String name, int argCount) {
+    Object receiver = vStack.get(vStack.size() - 1 - argCount);
+
+    if (!(receiver instanceof LPCObject)) {
+      runtimeError("Only objects have methods.");
+
+      return false;
+    }
+
+    LPCObject lpcObject = (LPCObject)receiver;
+
+    if (!lpcObject.methods().containsKey(name)) {
+      runtimeError("Undefined method '" + name + "'.");
+
+      return false;
+    }
+
+    Object value = lpcObject.methods().get(name);
+
+    vStack.set(vStack.size() - 1 - argCount, value);
+
+    return callValue(value, argCount);
+
+    //return invokeFromClass(instance.klass(), name, argCount);
+  }
+
+  //bindMethod(LoxClass, String)
+  private boolean bindMethod(LoxClass klass, String name) {
+    if (!klass.methods().containsKey(name)) {
+      runtimeError("Undefined property '" + name + "'.");
+
+      return false;
+    }
+
+    Closure method = klass.methods().get(name);
+    BoundMethod bound = new BoundMethod(vStack.peek(), method);
+    Object value = bound;
+
+    vStack.pop();
+
+    vStack.push(value);
+
+    return true;
+  }
+
+  //captureUpvalue(int)
+  Upvalue captureUpvalue(int location) {
+    Upvalue prevUpvalue = null;
+    Upvalue currUpvalue = openUpvalues; //start at head of list
+
+    while (currUpvalue != null && currUpvalue.location() > location) {
+      prevUpvalue = currUpvalue;
+
+      currUpvalue = currUpvalue.next();
+    }
+
+    if (currUpvalue != null && currUpvalue.location() == location)
+      return currUpvalue;
+
+    //create new Upvalue and insert into linked list of
+    //open upvalues between previous and current
+    Upvalue createdUpvalue = new Upvalue(location);
+
+    createdUpvalue.setNext(currUpvalue);
+
+    if (prevUpvalue == null)
+      openUpvalues = createdUpvalue; //new head of list
+    else
+      prevUpvalue.setNext(createdUpvalue); //insert into list
+
+    return createdUpvalue;
+  }
+
+  //closeUpvalues(int)
+  void closeUpvalues(int last) {
+    while (openUpvalues != null && openUpvalues.location() >= last) {
+      Upvalue upvalue = openUpvalues;
+
+      upvalue.setClosedValue(vStack.get(upvalue.location()));
+      upvalue.setLocation(-1);
+
+      //after upvalue is closed, reset head of linked list
+      //to next upvalue
+      openUpvalues = upvalue.next();
+      upvalue.setNext(null);
+    }
+  }
+
+  //isFalsey(Object)
+  boolean isFalsey(Object value) {
+    //nil and false are falsey and every other value behaves like true.
+    return value == null || (value instanceof Boolean && !(boolean)value);
+  }
+
+  //concatenate()
+  private void concatenate() {
+    String b = (String)vStack.pop();
+    String a = (String)vStack.pop();
+
+    vStack.push(a + b);
+  }
+
+  //equate()
+  private void equate() {
+    Object b = vStack.pop();
+    Object a = vStack.pop();
+
+    if (a == null)
+      vStack.push(b == null);
+    else
+      //pushValue(a.equals(b));
+      vStack.push(a.equals(b));
+  }
+
+  //readChunkCodeByte(CallFrame)
+  private byte readChunkCodeByte(CallFrame frame) {
+    return frame.closure().function().chunk().codes().get(frame.getAndIncrementIP());
+  }
+
+  //readChunkCodeWord(CallFrame)
+  private short readChunkCodeWord(CallFrame frame) {
+    byte hi = readChunkCodeByte(frame);
+    byte lo = readChunkCodeByte(frame);
+
+    return (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
+  }
+
+  //readChunkConstant(CallFrame)
+  private Object readChunkConstant(CallFrame frame) {
+    short index = readChunkCodeWord(frame);
+
+    return frame.closure().function().chunk().constants().get(index);
+  }
+
+  //readChunkConstantAsString(CallFrame)
+  private String readChunkConstantAsString(CallFrame frame) {
+    return (String)readChunkConstant(frame);
+  }
+
   //oneNumericOperand()
   private boolean oneNumericOperand() {
-    return peekValue() instanceof Double;
+    return vStack.peek() instanceof Double;
   }
 
   //errorOneNumber()
@@ -771,10 +731,10 @@ public class VM extends PropsObserver {
 
   //twoNumericOperands()
   private boolean twoNumericOperands() {
-    Object first = popValue(); //temporarily pop
-    Object second = peekValue();
+    Object first = vStack.pop(); //temporarily pop
+    Object second = vStack.peek();
 
-    pushValue(first);
+    vStack.push(first);
 
     return first instanceof Double && second instanceof Double;
   }
@@ -786,10 +746,10 @@ public class VM extends PropsObserver {
 
   //twoStringOperands()
   private boolean twoStringOperands() {
-    Object first = popValue();
-    Object second = peekValue();
+    Object first = vStack.pop();
+    Object second = vStack.peek();
 
-    pushValue(first); //push back again
+    vStack.push(first); //push back again
 
     return first instanceof String && second instanceof String;
   }
@@ -813,32 +773,32 @@ public class VM extends PropsObserver {
 
   //binaryOp(Operation)
   private void binaryOp(Operation op) {
-    double b = (double)popValue();
-    double a = (double)popValue();
+    double b = (double)vStack.pop();
+    double a = (double)vStack.pop();
 
     switch (op) {
       case OPERATION_PLUS:
-        pushValue(a + b);
+        vStack.push(a + b);
 
         break;
       case OPERATION_SUBTRACT:
-        pushValue(a - b);
+        vStack.push(a - b);
 
         break;
       case OPERATION_MULT:
-        pushValue(a * b);
+        vStack.push(a * b);
 
         break;
       case OPERATION_DIVIDE:
-        pushValue(a / b);
+        vStack.push(a / b);
 
         break;
       case OPERATION_GT:
-        pushValue(a > b);
+        vStack.push(a > b);
 
         break;
       case OPERATION_LT:
-        pushValue(a < b);
+        vStack.push(a < b);
 
         break;
     } //switch
@@ -867,10 +827,20 @@ public class VM extends PropsObserver {
     return true;
   }
 
+  //getLibPath()
+  public String getLibPath() {
+    return Props.instance().getString("PATH_LIB");
+  }
+
   //updateCachedProperties()
-  protected void updateCachedProperties() {
-    debugMaster = properties.getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && properties.getBool("DEBUG_PRINT_PROGRESS");
-    debugTraceExecution = debugMaster && properties.getBool("DEBUG_TRACE_EXECUTION");
+  private void updateCachedProperties() {
+    debugMaster = Props.instance().getBool("DEBUG_MASTER");
+    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
+    debugTraceExecution = debugMaster && Props.instance().getBool("DEBUG_EXEC");
+  }
+
+  //notifyPropertiesChanged()
+  public void notifyPropertiesChanged() {
+    updateCachedProperties();
   }
 }

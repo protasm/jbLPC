@@ -1,11 +1,12 @@
 package jbLPC.parser;
 
 import jbLPC.scanner.Token;
+import jbLPC.scanner.TokenType;
 
 public class Parser {
   public static final class Precedence {
     public static final int PREC_NONE       = 0;
-    public static final int PREC_ASSIGNMENT = 1;  // =
+    public static final int PREC_ASSIGNMENT = 1;  // =, -=, +=
     public static final int PREC_OR         = 2;  // or
     public static final int PREC_AND        = 3;  // and
     public static final int PREC_EQUALITY   = 4;  // == !=
@@ -51,6 +52,11 @@ public class Parser {
   //setCurrent(Token)
   public void setCurrent(Token current) {
     this.current = current;
+  }
+
+  //transformCurrent(TokenType)
+  public void transformCurrent(TokenType type) {
+    current = new Token(type, null, null, current.line());
   }
 
   //hadError()

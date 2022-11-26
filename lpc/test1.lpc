@@ -1,0 +1,15 @@
+println("Hello, world!");
+//This is a line comment.
+//
+#define NUM 1 
+clock();
+println(NUM + 99);
+  #    define FOO "FOO in test1"
+/*
+This is a block comment.
+*/
+   #include  "test2.lpc"
+println(FOO);
+println("For real.");
+#define FOO 1001
+println(FOO);

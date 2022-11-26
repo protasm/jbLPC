@@ -7,24 +7,27 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeSet;
+import java.util.SortedSet;
 
-import jbLPC.debug.Debugger;
 import jbLPC.vm.VM;
 
 public class JBLPC {
-  private Props properties;
-  private Debugger debugger;
   private VM vm;
   private int exitCode;
   private String exitMessage;
+  private Map<String, Pair<String>> replCommands;
 
   //JBLPC()
   public JBLPC() {
     String propsFile = System.getProperty("user.home") + "/jbLPC/main/props";
 
-    properties = new Props(propsFile);
-    debugger = new Debugger(properties);
-    vm = new VM(properties, debugger);
+    Props.instance().open(propsFile);
+
+    vm = new VM();
+    replCommands = buildREPLCommands();
   }
 
   //runFile(String)
@@ -96,79 +99,21 @@ public class JBLPC {
   private boolean handleREPLCommand(String command) {
     boolean continueREPL = true; //continue by default
 
-    if (command.equals("quit") || command.equals("q")) {
+    if (command.equals("debug"))
+      printDebugProperties();
+    else if (command.equals("lib"))
+      System.out.println(vm.getLibPath());
+    else if (command.equals("quit") || command.equals("q")) {
       exitCode = 0;
       exitMessage = "Goodbye.";
 
       continueREPL = false;
-    } else if (command.equals("debug")) {
-      System.out.println("Master: " + properties.getBool("DEBUG_MASTER"));
-      System.out.println("Print Stack: " + properties.getBool("DEBUG_PRINT_STACK"));
-      System.out.println("Trace Execution: " + properties.getBool("DEBUG_TRACE_EXECUTION"));
-      System.out.println("Print Progress: " + properties.getBool("DEBUG_PRINT_PROGRESS"));
-      System.out.println("Print Constants: " + properties.getBool("DEBUG_PRINT_CONSTANTS"));
-      System.out.println("Print Globals: " + properties.getBool("DEBUG_PRINT_GLOBALS"));
-      System.out.println("Print Locals: " + properties.getBool("DEBUG_PRINT_LOCALS"));
-      System.out.println("Print Source: " + properties.getBool("DEBUG_PRINT_SOURCE"));
-      System.out.println("Print OpCode: " + properties.getBool("DEBUG_PRINT_OPCODE"));
-      System.out.println("Print Code: " + properties.getBool("DEBUG_PRINT_CODE"));
-      System.out.println("Print Codes: " + properties.getBool("DEBUG_PRINT_CODES"));
-    } else if (command.equals("master"))
-      System.out.println(
-        "Master " +
-        (properties.toggleBool("DEBUG_MASTER") ? "ON" : "OFF")
-      );
-    else if (command.equals("printstack"))
-      System.out.println(
-        "Print Stack " +
-        (properties.toggleBool("DEBUG_PRINT_STACK") ? "ON" : "OFF")
-      );
-    else if (command.equals("traceexecution"))
-      System.out.println(
-        "Trace Execution " +
-        (properties.toggleBool("DEBUG_TRACE_EXECUTION") ? "ON" : "OFF")
-      );
-    else if (command.equals("printprogress"))
-      System.out.println(
-        "Print Progress " +
-        (properties.toggleBool("DEBUG_PRINT_PROGRESS") ? "ON" : "OFF")
-      );
-    else if (command.equals("printconstants"))
-      System.out.println(
-        "Print Constants " +
-        (properties.toggleBool("DEBUG_PRINT_CONSTANTS") ? "ON" : "OFF")
-      );
-    else if (command.equals("printglobals"))
-      System.out.println(
-        "Print Globals " +
-        (properties.toggleBool("DEBUG_PRINT_GLOBALS") ? "ON" : "OFF")
-      );
-    else if (command.equals("printlocals"))
-      System.out.println(
-        "Print Locals " +
-        (properties.toggleBool("DEBUG_PRINT_LOCALS") ? "ON" : "OFF")
-      );
-    else if (command.equals("printsource"))
-      System.out.println(
-        "Print Source " +
-        (properties.toggleBool("DEBUG_PRINT_SOURCE") ? "ON" : "OFF")
-      );
-    else if (command.equals("printopcode"))
-      System.out.println(
-        "Print OpCode " +
-        (properties.toggleBool("DEBUG_PRINT_OPCODE") ? "ON" : "OFF")
-      );
-    else if (command.equals("printcode"))
-      System.out.println(
-        "Print Code " +
-        (properties.toggleBool("DEBUG_PRINT_CODE") ? "ON" : "OFF")
-      );
-    else if (command.equals("printcodes"))
-      System.out.println(
-        "Print Codes " +
-        (properties.toggleBool("DEBUG_PRINT_CODES") ? "ON" : "OFF")
-      );
-    else
+    } else if (replCommands.containsKey(command)) {
+      Pair<String> pair = replCommands.get(command);
+      String newStatus = Props.instance().toggleBool(pair.left()) ? "ON" : "OFF";
+
+      System.out.println(command + ": " + newStatus);
+    } else
       System.out.println("Unknown REPL command: '" + command + "'");
 
     return continueREPL;
@@ -176,7 +121,7 @@ public class JBLPC {
 
   //shutdown(int, String)
   private void shutdown(int code, String message) {
-    properties.close();
+    Props.instance().close();
 
     if (code == 0) {
       if (message != null)
@@ -189,6 +134,48 @@ public class JBLPC {
 
       System.exit(code);
     }
+  }
+
+  //buildREPLCommands()
+  private Map<String, Pair<String>> buildREPLCommands() {
+    return new HashMap<>() {{
+      put("master",  new Pair<String>("DEBUG_MASTER",  "Master"));
+      put("stack",   new Pair<String>("DEBUG_STACK",   "Print VM Values stack [requires 'exec']"));
+      put("exec",    new Pair<String>("DEBUG_EXEC",    "Trace VM execution"));
+      put("prog",    new Pair<String>("DEBUG_PROG",    "Show interpret pipeline progress"));
+      put("consts",  new Pair<String>("DEBUG_CONSTS",  "Print constants for Chunk in current scope [requires 'comp']"));
+      put("globals", new Pair<String>("DEBUG_GLOBALS", "Print VM globals [requires 'exec']"));
+      put("locals",  new Pair<String>("DEBUG_LOCALS",  "Print Locals in current scope [requires 'comp']"));
+      put("upvals",  new Pair<String>("DEBUG_UPVALS",  "Print Upvalues for function in current scope [requires 'comp']"));
+      put("source",  new Pair<String>("DEBUG_SOURCE",  "Print source code being interpreted"));
+      put("opcode",  new Pair<String>("DEBUG_OPCODE",  "Prefix hex values of OpCodes"));
+      put("comp",    new Pair<String>("DEBUG_COMP",    "Print compiled Function in current scope"));
+      put("codes",   new Pair<String>("DEBUG_CODES",   "Print codes for Chunk in current scope [requires 'comp']"));
+      put("lines",   new Pair<String>("DEBUG_LINES",   "Print source lines for Chunk codes in current scope [requires 'comp']"));
+    }};
+  }
+
+  //printDebugProperties()
+  private void printDebugProperties() {
+    //print "master" key first
+    String paddedKey = String.format("%-" + 10 + "s", "master");
+    String status = Props.instance().getStatus("DEBUG_MASTER");
+    String paddedStatus = String.format("%-" + 3 + "s", status);
+    System.out.println(paddedKey + ": " + paddedStatus + " Master");
+
+    SortedSet<String> keys = new TreeSet<>(replCommands.keySet());
+
+    //loop through remaining keys, sorting alphabetically
+    for (String key : keys) {
+      if (key == "master") continue; //already printed, skip
+
+      Pair<String> pair = replCommands.get(key);
+      paddedKey = String.format("%-" + 10 + "s", key); 
+      status = Props.instance().getStatus(pair.left());
+      paddedStatus = String.format("%-" + 3 + "s", status); 
+
+      System.out.println(paddedKey + ": " + paddedStatus + " " + pair.right());
+    } //for (String key : keys)
   }
 
   //main(String[])

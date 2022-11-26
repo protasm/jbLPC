@@ -1,0 +1,13 @@
+/*
+ * Test2
+ */
+
+#define FOO "anthill"
+
+#define MOM "dad"
+
+println(MOM);
+
+#define MOM 99
+println(MOM + 2);
+

@@ -1,9 +1,11 @@
 package jbLPC.nativefn;
 
+import jbLPC.vm.VM;
+
 public class NativeFoo extends NativeFn {
-  //NativeFoo()
-  public NativeFoo() {
-    this.arity = 3;
+  //NativeFoo(VM, String, int)
+  public NativeFoo(VM vm, String fnName, int arity) {
+    super(vm, fnName, arity);
   }
 
   //execute(Object[])
@@ -14,11 +16,5 @@ public class NativeFoo extends NativeFn {
     System.out.println("Foo3: " + args[2]);
 
     return null;
-  }
-
-  //toString()
-  @Override
-  public String toString() {
-    return "<nativefn: foo>";
   }
 }
