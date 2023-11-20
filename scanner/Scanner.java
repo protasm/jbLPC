@@ -48,6 +48,9 @@ import static jbLPC.scanner.TokenType.TOKEN_VECTOR;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -65,78 +68,80 @@ public class Scanner implements PropsObserver, Iterator<Token> {
   private static final Map<Character, TokenType> oneCharLexemes;
   private ScannableSource ss;
 
-  //Cached properties
+  // Cached properties
   private boolean debugMaster;
   private boolean debugPrintProgress;
   private boolean debugPrintSource;
 
   static {
-	lpcTypes = new HashMap<>() {
-	  private static final long serialVersionUID = 1L;
-	  
-	  {
-		// LPC Types.
-		put("int",    TOKEN_PRIMITIVE);
-		put("mixed",  TOKEN_PRIMITIVE);
-		put("object", TOKEN_PRIMITIVE);
-		put("status", TOKEN_PRIMITIVE);
-		put("string", TOKEN_PRIMITIVE);
-		put("void",   TOKEN_PRIMITIVE);
-	  }
-	};
-    
-	reservedWords = new HashMap<>() {
+    lpcTypes = new HashMap<>() {
       private static final long serialVersionUID = 1L;
 
       {
-		// Keywords.
-		put("else",    TOKEN_ELSE);
-      	put("false",   TOKEN_FALSE);
-      	put("for",     TOKEN_FOR);
-      	put("if",      TOKEN_IF);
-      	put("inherit", TOKEN_INHERIT);
-      	put("nil",     TOKEN_NIL);
-      	put("return",  TOKEN_RETURN);
-      	put("this",    TOKEN_THIS);
-      	put("true",    TOKEN_TRUE);
-      	put("while",   TOKEN_WHILE);
-	  }
-	};
+        // LPC Types.
+        put("int", TOKEN_PRIMITIVE);
+        put("mixed", TOKEN_PRIMITIVE);
+        put("object", TOKEN_PRIMITIVE);
+        put("status", TOKEN_PRIMITIVE);
+        put("string", TOKEN_PRIMITIVE);
+        put("void", TOKEN_PRIMITIVE);
+      }
+    };
+
+    reservedWords = new HashMap<>() {
+      private static final long serialVersionUID = 1L;
+
+      {
+        // Keywords.
+        put("else", TOKEN_ELSE);
+        put("false", TOKEN_FALSE);
+        put("for", TOKEN_FOR);
+        put("if", TOKEN_IF);
+        put("inherit", TOKEN_INHERIT);
+        put("nil", TOKEN_NIL);
+        put("return", TOKEN_RETURN);
+        put("this", TOKEN_THIS);
+        put("true", TOKEN_TRUE);
+        put("while", TOKEN_WHILE);
+      }
+    };
 
     oneCharLexemes = new HashMap<>() {
       private static final long serialVersionUID = 1L;
 
-	  {
-	    put('(', TOKEN_LEFT_PAREN);
-	    put(')', TOKEN_RIGHT_PAREN);
-	    put('{', TOKEN_LEFT_BRACE);
-	    put('}', TOKEN_RIGHT_BRACE);
-	    put('.', TOKEN_DOT);
-	    put(',', TOKEN_COMMA);
-	    put(';', TOKEN_SEMICOLON);
-	  }
-	};
+      {
+        put('(', TOKEN_LEFT_PAREN);
+        put(')', TOKEN_RIGHT_PAREN);
+        put('{', TOKEN_LEFT_BRACE);
+        put('}', TOKEN_RIGHT_BRACE);
+        put('.', TOKEN_DOT);
+        put(',', TOKEN_COMMA);
+        put(';', TOKEN_SEMICOLON);
+      }
+    };
   }
 
-  //Scanner(String)
+  // Scanner(String)
   public Scanner(String source) {
     Props.instance().registerObserver(this);
 
     try (Preprocessor pp = new Preprocessor()) {
-	  pp.addInput(new StringLexerSource(source, true));
+      pp.addInput(new StringLexerSource(source, true));
       pp.getSystemIncludePath().add(".");
 
-	  ss = new ScannableSource(pp.preprocess());
-	} catch (IOException e) {
-	  // TODO Auto-generated catch block
-	  e.printStackTrace();
-	}
+      ss = new ScannableSource(pp.preprocess());
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
 
-    if (debugPrintSource) Debugger.instance().printSource(ss.toString());
-    if (debugPrintProgress) Debugger.instance().printProgress("Scanner initialized.");
+    if (debugPrintSource)
+      Debugger.instance().printSource(ss.toString());
+    if (debugPrintProgress)
+      Debugger.instance().printProgress("Scanner initialized.");
   }
 
-  //lexToken()
+  // lexToken()
   public Token lexToken() {
     if (ss.atEnd())
       return new Token(TOKEN_EOF, "", null, ss.line());
@@ -145,83 +150,94 @@ public class Scanner implements PropsObserver, Iterator<Token> {
 
     char c = ss.consumeOneChar();
 
-    //one-char lexeme
+    // one-char lexeme
     if (oneCharLexemes.containsKey(c))
       return makeToken(oneCharLexemes.get(c));
-    
-    //number
-    if (isDigit(c)) return number();
-    
-    //identifier
-    if (isAlpha(c)) return identifier();
 
-    //symbol
+    // number
+    if (isDigit(c))
+      return number();
+
+    // identifier
+    if (isAlpha(c))
+      return identifier();
+
+    // symbol
     switch (c) {
-      case EOL: return null;
-      case '"': return string();
-      case '&':
-        if (ss.match('&')) return makeToken(TOKEN_DBL_AMP);
-        else return unexpectedChar(c);
-      case '|':
-        if (ss.match('|')) return makeToken(TOKEN_DBL_PIPE);
-        else return unexpectedChar(c);
-      case ':':
-        if (ss.match(':')) return makeToken(TOKEN_SUPER);
-        else return unexpectedChar(c);
-      case '-':
-        if (ss.match('-'))
-          return makeToken(TOKEN_MINUS_MINUS);
-        else if (ss.match('='))
-          return makeToken(TOKEN_MINUS_EQUAL);
-        else if (ss.match('>'))
-          return makeToken(TOKEN_INVOKE);
-        else
-          return makeToken(TOKEN_MINUS);
-      case '+':
-        if (ss.match('+'))
-          return makeToken(TOKEN_PLUS_PLUS);
-        else if (ss.match('='))
-          return makeToken(TOKEN_PLUS_EQUAL);
-        else
-          return makeToken(TOKEN_PLUS);
-      case '!':
-        return makeToken(ss.match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
-      case '=':
-        return makeToken(ss.match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
-      case '<':
-        return makeToken(ss.match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
-      case '>':
-        return makeToken(ss.match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
-      case '/':
-        if (ss.match('/'))
-          return lineComment();
-        else if (ss.match('*'))
-          return blockComment();
-        else if (ss.match('='))
-          return makeToken(TOKEN_SLASH_EQUAL);
-        else
-          return makeToken(TOKEN_SLASH);
-      case '*':
-        return makeToken(ss.match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
-      case ' ':
-      case '\r':
-      case '\t':
-        while (isWhitespace(ss.peek())) ss.advance(); //fast-forward through whitespace
-
-        return null;
-      default:
+    case EOL:
+      return null;
+    case '"':
+      return string();
+    case '&':
+      if (ss.match('&'))
+        return makeToken(TOKEN_DBL_AMP);
+      else
         return unexpectedChar(c);
-    } //switch
+    case '|':
+      if (ss.match('|'))
+        return makeToken(TOKEN_DBL_PIPE);
+      else
+        return unexpectedChar(c);
+    case ':':
+      if (ss.match(':'))
+        return makeToken(TOKEN_SUPER);
+      else
+        return unexpectedChar(c);
+    case '-':
+      if (ss.match('-'))
+        return makeToken(TOKEN_MINUS_MINUS);
+      else if (ss.match('='))
+        return makeToken(TOKEN_MINUS_EQUAL);
+      else if (ss.match('>'))
+        return makeToken(TOKEN_INVOKE);
+      else
+        return makeToken(TOKEN_MINUS);
+    case '+':
+      if (ss.match('+'))
+        return makeToken(TOKEN_PLUS_PLUS);
+      else if (ss.match('='))
+        return makeToken(TOKEN_PLUS_EQUAL);
+      else
+        return makeToken(TOKEN_PLUS);
+    case '!':
+      return makeToken(ss.match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
+    case '=':
+      return makeToken(ss.match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
+    case '<':
+      return makeToken(ss.match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+    case '>':
+      return makeToken(ss.match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+    case '/':
+      if (ss.match('/'))
+        return lineComment();
+      else if (ss.match('*'))
+        return blockComment();
+      else if (ss.match('='))
+        return makeToken(TOKEN_SLASH_EQUAL);
+      else
+        return makeToken(TOKEN_SLASH);
+    case '*':
+      return makeToken(ss.match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+    case ' ':
+    case '\r':
+    case '\t':
+      while (isWhitespace(ss.peek()))
+        ss.advance(); // fast-forward through whitespace
+
+      return null;
+    default:
+      return unexpectedChar(c);
+    } // switch
   }
 
-  //lineComment()
+  // lineComment()
   private Token lineComment() {
     ss.advanceTo(EOL);
 
     return null;
   }
 
-  //blockComment()
+  // blockComment()
   private Token blockComment() {
     while (!ss.atEnd()) {
       ss.advanceTo('*');
@@ -231,111 +247,117 @@ public class Scanner implements PropsObserver, Iterator<Token> {
 
       ss.advance();
 
-      if (ss.match('/')) return null;
-    } //while
+      if (ss.match('/'))
+        return null;
+    } // while
 
     // Error if we get here.
     return errorToken("Unterminated block comment.");
   }
 
-  //identifier()
+  // identifier()
   private Token identifier() {
-    while (isAlphaNumeric(ss.peek())) ss.advance();
-    
+    while (isAlphaNumeric(ss.peek()))
+      ss.advance();
+
     String str = ss.read();
-    
-    //check LPC types first
+
+    // check LPC types first
     TokenType type = lpcTypes.get(str);
-    
+
     if (type != null) {
-      if (ss.nextCharOnLine() == '*')
+      if (ss.nextCharOnLine() == '*') {
         type = TOKEN_VECTOR;
+
+        ss.advancePast('*');
+      }
 
       return makeToken(type);
     }
 
-    //check reserved words next
+    // check reserved words next
     type = reservedWords.get(str);
 
-    //treat as identifier
-    if (type == null) type = TOKEN_IDENTIFIER;
+    // treat as identifier
+    if (type == null)
+      type = TOKEN_IDENTIFIER;
 
     return makeToken(type);
   }
 
-  //number()
+  // number()
   private Token number() {
-    while (isDigit(ss.peek())) ss.advance();
+    while (isDigit(ss.peek()))
+      ss.advance();
 
     // Look for a fractional part.
     if (ss.peek() == '.' && isDigit(ss.peekNext())) {
-      ss.advance(); //consume the '.'
+      ss.advance(); // consume the '.'
 
-      while (isDigit(ss.peek())) ss.advance();
+      while (isDigit(ss.peek()))
+        ss.advance();
     }
 
     return makeToken(TOKEN_NUMBER, Double.parseDouble(ss.read()));
   }
 
-  //string()
+  // string()
   private Token string() {
     if (!ss.advanceTo('"'))
       return errorToken("Unterminated string.");
 
-    ss.advance(); //consume the closing '"'
+    ss.advance(); // consume the closing '"'
 
     return makeToken(TOKEN_STRING, ss.readTrimmed());
   }
 
-  //isWhitespace(char)
+  // isWhitespace(char)
   private boolean isWhitespace(char c) {
     return (c == ' ') || (c == '\r') || (c == '\t');
   }
 
-  //isAlpha(char)
+  // isAlpha(char)
   private boolean isAlpha(char c) {
-    return (c >= 'a' && c <= 'z') ||
-           (c >= 'A' && c <= 'Z') ||
-            c == '_';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
   }
 
-  //isAlphaNumeric(char)
+  // isAlphaNumeric(char)
   private boolean isAlphaNumeric(char c) {
     return isAlpha(c) || isDigit(c);
   }
 
-  //isDigit(char)
+  // isDigit(char)
   private boolean isDigit(char c) {
     return c >= '0' && c <= '9';
   }
 
-  //unexpectedChar(char)
+  // unexpectedChar(char)
   private Token unexpectedChar(char c) {
     return errorToken("Unexpected character: '" + c + "'.");
   }
 
-  //errorToken(String)
+  // errorToken(String)
   private Token errorToken(String message) {
     return new Token(TOKEN_ERROR, message, null, ss.line());
   }
 
-  //makeToken(TokenType)
+  // makeToken(TokenType)
   private Token makeToken(TokenType type) {
     return makeToken(type, null);
   }
 
-  //makeToken(TokenType, Object)
+  // makeToken(TokenType, Object)
   private Token makeToken(TokenType type, Object literal) {
     return new Token(type, ss.read(), literal, ss.line());
   }
 
-  //hasNext()
+  // hasNext()
   @Override
   public boolean hasNext() {
     return true;
   }
 
-  //next()
+  // next()
   @Override
   public Token next() {
     Token token;
@@ -347,38 +369,50 @@ public class Scanner implements PropsObserver, Iterator<Token> {
     return token;
   }
 
-  //remove()
+  // remove()
   @Override
   public void remove() {
     throw new UnsupportedOperationException();
   }
 
-  //updateCachedProperties()
+  // updateCachedProperties()
   private void updateCachedProperties() {
     debugMaster = Props.instance().getBool("DEBUG_MASTER");
     debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
     debugPrintSource = debugMaster && Props.instance().getBool("DEBUG_SOURCE");
   }
 
-  //notifyPropertiesChanged()
+  // notifyPropertiesChanged()
   @Override
   public void notifyPropertiesChanged() {
     updateCachedProperties();
   }
-  
-  //main(String[])
+
+  // main(String[])
   public static void main(String[] args) {
-	String sourcePath = "/Users/jonathan/lib/obj/armour.c";
-    Scanner scanner = new Scanner(sourcePath);
-    Token token;
-    
-    for (;;) {
-      token = scanner.next();
-      
-      if (token.type() == TOKEN_EOF)
-        break;
-      
-      System.out.println(token);
+    String propsFile = System.getProperty("user.home") + "/eclipse-workspace/jbLPC/src/jbLPC/props";
+    Props.instance().open(propsFile);
+
+    String path = "/Users/jonathan/lib/obj/armour.c";
+    byte[] bytes;
+
+    try {
+      bytes = Files.readAllBytes(Paths.get(path));
+      String source = new String(bytes, Charset.defaultCharset());
+
+      Scanner scanner = new Scanner(source);
+      Token token;
+
+      for (;;) {
+        token = scanner.next();
+
+        if (token.type() == TOKEN_EOF)
+          break;
+
+        System.out.println(token);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
 }

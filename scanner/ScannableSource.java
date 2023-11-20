@@ -7,23 +7,24 @@ public class ScannableSource {
   private int head, tail;
   private int line;
 
-  //ScannableSource(String)
+  // ScannableSource(String)
   public ScannableSource(String source) {
     this.source = source;
 
     reset();
   }
 
-  //advance()
+  // advance()
   public void advance() {
-    //This should be the only place head is incremented,
-    //to ensure that line is also incremented as needed.
-    if (peek() == EOL) line++;
+    // This should be the only place head is incremented,
+    // to ensure that line is also incremented as needed.
+    if (peek() == EOL)
+      line++;
 
     head++;
   }
 
-  //advancePast(char)
+  // advancePast(char)
   public boolean advancePast(char c) {
     advanceTo(c);
 
@@ -32,7 +33,7 @@ public class ScannableSource {
     return atEnd();
   }
 
-  //advanceTo(char)
+  // advanceTo(char)
   public boolean advanceTo(char c) {
     while (peek() != c && !atEnd())
       advance();
@@ -40,17 +41,17 @@ public class ScannableSource {
     return !atEnd();
   }
 
-  //atEnd()
+  // atEnd()
   public boolean atEnd() {
     return head >= source.length();
   }
 
-  //atStart()
+  // atStart()
   public boolean atStart() {
     return head == 0;
   }
 
-  //consumeOneChar()
+  // consumeOneChar()
   public char consumeOneChar() {
     char c = peek();
 
@@ -59,59 +60,63 @@ public class ScannableSource {
     return c;
   }
 
-  //head()
+  // head()
   public int head() {
     return head;
   }
 
-  //line()
+  // line()
   public int line() {
     return line;
   }
 
-  //match()
+  // match()
   public boolean match(char expected) {
-    if (peek() != expected) return false;
+    if (peek() != expected)
+      return false;
 
     advance();
 
     return true;
   }
-  
-  //nextCharOnLine()
+
+  // nextCharOnLine()
   public char nextCharOnLine() {
-	int scout = head;
-	char c;
-	
-	do {
+    int scout = head;
+    char c;
+
+    do {
       c = source.charAt(scout++);
-	} while (Character.isWhitespace(c));
-	
-	return c;
+    } while (Character.isWhitespace(c));
+
+    return c;
   }
 
-  //peek()
+  // peek()
   public char peek() {
-    if (atEnd()) return NULL_CHAR;
+    if (atEnd())
+      return NULL_CHAR;
 
     return source.charAt(head);
   }
 
-  //peekNext()
+  // peekNext()
   public char peekNext() {
-    if (head + 1 >= source.length()) return NULL_CHAR;
+    if (head + 1 >= source.length())
+      return NULL_CHAR;
 
     return source.charAt(head + 1);
   }
 
-  //peekPrev()
+  // peekPrev()
   public char peekPrev() {
-    if (atStart() || atEnd()) return NULL_CHAR;
+    if (atStart() || atEnd())
+      return NULL_CHAR;
 
     return source.charAt(head - 1);
   }
 
-  //read()
+  // read()
   public String read() {
     // Read string from tail (inclusive) through
     // head (exclusive);
@@ -121,29 +126,29 @@ public class ScannableSource {
     return source.substring(tail, head);
   }
 
-  //readTrimmed()
+  // readTrimmed()
   public String readTrimmed() {
     return source.substring(tail + 1, head - 1);
   }
 
-  //reset()
+  // reset()
   public void reset() {
     head = 0;
     tail = 0;
     line = 1;
   }
 
-  //source()
+  // source()
   public String source() {
     return source;
   }
 
-  //syncTailHead()
+  // syncTailHead()
   public void syncTailHead() {
     tail = head;
   }
 
-  //tail()
+  // tail()
   public int tail() {
     return tail;
   }
