@@ -393,7 +393,7 @@ public class Scanner implements PropsObserver, Iterator<Token> {
     String propsFile = System.getProperty("user.home") + "/eclipse-workspace/jbLPC/src/jbLPC/props";
     Props.instance().open(propsFile);
 
-    String path = "/Users/jonathan/lib/obj/armour.c";
+    String path = "/Users/jonathan/lib/obj/testobj.c";
     byte[] bytes;
 
     try {

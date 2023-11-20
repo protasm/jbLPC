@@ -9,6 +9,7 @@ import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_INHERIT;
 import static jbLPC.compiler.OpCode.OP_JUMP;
 import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.OpCode.OP_LOOP;
@@ -39,11 +40,13 @@ import static jbLPC.scanner.TokenType.TOKEN_RIGHT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
+import static jbLPC.scanner.TokenType.TOKEN_STRING;
 import static jbLPC.scanner.TokenType.TOKEN_PRIMITIVE;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
+import jbLPC.parser.parselet.VariableParselet;
 import jbLPC.scanner.Token;
 import jbLPC.util.Props;
 import jbLPC.util.PropsObserver;
@@ -521,7 +524,28 @@ public class LPCCompiler implements PropsObserver {
 
   //inherit()
   private void inherit() {
-	//temp
+    parser.consume(TOKEN_STRING, "Expect inherited object name.");
+
+    //at runtime, load inherited object name on stack
+    namedVariable(parser.previous(), false);
+    
+    parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
+
+    //TODO
+//    if (identifiersEqual(classToken, parser.previous()))
+//      error("A class can't inherit from itself.");
+
+//    beginScope();
+
+//    addLocal(syntheticToken("super"));
+
+//    defineVariable(0x00);
+
+//    namedVariable(classToken, false);
+
+    emitByte(OP_INHERIT);
+
+//    currentClass.setHasSuperclass(true);
   }
 
   //lowByte(short)

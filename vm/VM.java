@@ -388,8 +388,9 @@ public class VM implements PropsObserver {
 
           break;
         case OP_INHERIT:
-          Object iValue = vStack.get(vStack.size() - 2);
-
+          String iName = readChunkConstantAsString(frame);
+          System.out.println(iName);
+/*
           if (!(iValue instanceof LPCObject)) {
             runtimeError("SuperObject must be an LPCObject.");
 
@@ -412,6 +413,7 @@ public class VM implements PropsObserver {
           iSubObject.inheritMethods(iSuperObject.methods());
 
           vStack.pop(); // iSubObject.
+          */
 
           break;
         case OP_OBJECT: //Create a new, empty LPCObject
