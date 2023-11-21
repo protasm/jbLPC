@@ -1,0 +1,11 @@
+#!/bin/bash
+
+DIR="$HOME/eclipse-workspace/jbLPC/src/jbLPC"
+
+$DIR/bin/clean
+
+find $DIR -name "*.java" > $DIR/sources.txt
+
+javac -g @$DIR/sources.txt
+
+rm $DIR/sources.txt

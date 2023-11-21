@@ -111,7 +111,7 @@ public class VM implements PropsObserver {
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
     if (debugPrintProgress)
-      Debugger.instance().printProgress("Executing....");
+      Debugger.instance().printProgress("Executing " + name + ".");
 
     Closure closure = new Closure(cScript);
 
@@ -131,14 +131,17 @@ public class VM implements PropsObserver {
       if (debugTraceExecution)
         Debugger.instance().traceExecution(frame, globals, vStack.toArray());
       
+      //Prior pass may have stacked a compileable object on
+      //the vStack; if so, run that compilation before continuing
+      //with execution.
       if (vStack.peek() instanceof Compilation) {
-    	callValue(vStack.peek(), 0);
+    	  callValue(vStack.peek(), 0);
     	  
-    	frame = fStack.peek();
+    	  frame = fStack.peek();
     	
-    	vStack.pop();
+    	  vStack.pop();
     	  
-    	continue;
+    	  continue;
       }
 
       byte opCode = readChunkOpCodeByte(frame);
@@ -388,11 +391,10 @@ public class VM implements PropsObserver {
 
           break;
         case OP_INHERIT:
-          String iName = readChunkConstantAsString(frame);
-          System.out.println(iName);
-/*
+          Object iValue = vStack.get(vStack.size() - 2);
+
           if (!(iValue instanceof LPCObject)) {
-            runtimeError("SuperObject must be an LPCObject.");
+            runtimeError("Inherited object must be an LPCObject.");
 
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
@@ -402,18 +404,16 @@ public class VM implements PropsObserver {
           iValue = vStack.peek();
 
           if (!(iValue instanceof LPCObject)) {
-            runtimeError("SubObject must be an LPCObject.");
+            runtimeError("Inheriting object must be an LPCObject.");
 
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
 
           LPCObject iSubObject = (LPCObject)iValue;
 
-          iSubObject.inheritFields(iSuperObject.fields());
-          iSubObject.inheritMethods(iSuperObject.methods());
+          iSubObject.setSuperObj(iSuperObject);
 
-          vStack.pop(); // iSubObject.
-          */
+          vStack.pop(); // Inheriting object.
 
           break;
         case OP_OBJECT: //Create a new, empty LPCObject

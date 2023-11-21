@@ -82,7 +82,9 @@ public class Debugger implements PropsObserver {
 
   //printProgress(String)
   public void printProgress(String message) {
-    System.out.println(message);
+    System.out.print("\n===");
+    System.out.print(message.toUpperCase());
+    System.out.print("===\n");
   }
 
   //printSource(String)
@@ -94,6 +96,9 @@ public class Debugger implements PropsObserver {
 
   //traceExecution(CallFrame, Map<String, Object>, Object[])
   public void traceExecution(CallFrame frame, Map<String, Object> globals, Object[] stackValues) {
+    System.out.print("\n");
+    
+    //Print Globals array
     if (printGlobals) {
       System.out.print("Globals: ");
 
@@ -107,8 +112,9 @@ public class Debugger implements PropsObserver {
       System.out.print("\n");
     }
 
+    //Print Stack values array
     if (printStack) {
-      System.out.print("          ");
+      System.out.print("Stack: ");
 
       for (int i = 0; i < stackValues.length; i++) {
         Object stackValue = stackValues[i];
@@ -170,12 +176,16 @@ public class Debugger implements PropsObserver {
   }
 
   public void printBanner(String text) {
+    System.out.print("\n");
     System.out.println("== " + text + " ==");
   }
 
   //disassembleInstruction(Chunk, int)
   public int disassembleInstruction(Chunk chunk, int offset) {
     byte instruction = getCode(chunk, offset);
+    int result;
+    
+    System.out.print("Instr: ");
 
     System.out.print(String.format("%04d", offset));
 
@@ -192,85 +202,89 @@ public class Debugger implements PropsObserver {
 
     switch (instruction) {
       case OP_CONSTANT:
-        return constantInstruction("OP_CONSTANT", chunk, offset);
+        result = constantInstruction("OP_CONSTANT", chunk, offset); break;
       case OP_NIL:
-        return simpleInstruction("OP_NIL", offset);
+        result = simpleInstruction("OP_NIL", offset); break;
       case OP_TRUE:
-        return simpleInstruction("OP_TRUE", offset);
+        result = simpleInstruction("OP_TRUE", offset); break;
       case OP_FALSE:
-        return simpleInstruction("OP_FALSE", offset);
+        result = simpleInstruction("OP_FALSE", offset); break;
       case OP_POP:
-        return simpleInstruction("OP_POP", offset);
+        result = simpleInstruction("OP_POP", offset); break;
       case OP_GET_LOCAL:
-        return wordOperandInstruction("OP_GET_LOCAL", chunk, offset);
+        result = wordOperandInstruction("OP_GET_LOCAL", chunk, offset); break;
       case OP_SET_LOCAL:
-        return wordOperandInstruction("OP_SET_LOCAL", chunk, offset);
+        result = wordOperandInstruction("OP_SET_LOCAL", chunk, offset); break;
       case OP_DEFINE_GLOBAL:
-        return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+        result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); break;
       case OP_GET_GLOBAL:
-        return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+        result = constantInstruction("OP_GET_GLOBAL", chunk, offset); break;
       case OP_SET_GLOBAL:
-        return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+        result = constantInstruction("OP_SET_GLOBAL", chunk, offset); break;
       case OP_GET_UPVALUE:
-        return wordOperandInstruction("OP_GET_UPVALUE", chunk, offset);
+        result = wordOperandInstruction("OP_GET_UPVALUE", chunk, offset); break;
       case OP_SET_UPVALUE:
-        return wordOperandInstruction("OP_SET_UPVALUE", chunk, offset);
+        result = wordOperandInstruction("OP_SET_UPVALUE", chunk, offset); break;
       case OP_GET_PROPERTY:
-        return constantInstruction("OP_GET_PROPERTY", chunk, offset);
+        result = constantInstruction("OP_GET_PROPERTY", chunk, offset); break;
       case OP_SET_PROPERTY:
-        return constantInstruction("OP_SET_PROPERTY", chunk, offset);
+        result = constantInstruction("OP_SET_PROPERTY", chunk, offset); break;
       case OP_GET_SUPER:
-        return constantInstruction("OP_GET_SUPER", chunk, offset);
+        result = constantInstruction("OP_GET_SUPER", chunk, offset); break;
       case OP_EQUAL:
-        return simpleInstruction("OP_EQUAL", offset);
+        result = simpleInstruction("OP_EQUAL", offset); break;
       case OP_GREATER:
-        return simpleInstruction("OP_GREATER", offset);
+        result = simpleInstruction("OP_GREATER", offset); break;
       case OP_LESS:
-        return simpleInstruction("OP_LESS", offset);
+        result = simpleInstruction("OP_LESS", offset); break;
       case OP_ADD:
-        return simpleInstruction("OP_ADD", offset);
+        result = simpleInstruction("OP_ADD", offset); break;
       case OP_SUBTRACT:
-        return simpleInstruction("OP_SUBTRACT", offset);
+        result = simpleInstruction("OP_SUBTRACT", offset); break;
       case OP_MULTIPLY:
-        return simpleInstruction("OP_MULTIPLY", offset);
+        result = simpleInstruction("OP_MULTIPLY", offset); break;
       case OP_DIVIDE:
-        return simpleInstruction("OP_DIVIDE", offset);
+        result = simpleInstruction("OP_DIVIDE", offset); break;
       case OP_NOT:
-        return simpleInstruction("OP_NOT", offset);
+        result = simpleInstruction("OP_NOT", offset); break;
       case OP_NEGATE:
-        return simpleInstruction("OP_NEGATE", offset);
+        result = simpleInstruction("OP_NEGATE", offset); break;
       case OP_JUMP:
-        return jumpInstruction("OP_JUMP", 1, chunk, offset);
+        result = jumpInstruction("OP_JUMP", 1, chunk, offset); break;
       case OP_JUMP_IF_FALSE:
-        return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+        result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); break;
       case OP_LOOP:
-        return jumpInstruction("OP_LOOP", -1, chunk, offset);
+        result = jumpInstruction("OP_LOOP", -1, chunk, offset); break;
       case OP_CALL:
-        return byteOperandInstruction("OP_CALL", chunk, offset, "# args:");
+        result = byteOperandInstruction("OP_CALL", chunk, offset, "# args:"); break;
       case OP_INVOKE:
-        return invokeInstruction("OP_INVOKE", chunk, offset);
+        result = invokeInstruction("OP_INVOKE", chunk, offset); break;
       case OP_SUPER_INVOKE:
-        return invokeInstruction("OP_SUPER_INVOKE", chunk, offset);
+        result = invokeInstruction("OP_SUPER_INVOKE", chunk, offset); break;
       case OP_CLOSURE:
-        return closureInstruction("OP_CLOSURE", chunk, offset);
+        result = closureInstruction("OP_CLOSURE", chunk, offset); break;
       case OP_CLOSE_UPVALUE:
-        return simpleInstruction("OP_CLOSE_UPVALUE", offset);
+        result = simpleInstruction("OP_CLOSE_UPVALUE", offset); break;
       case OP_RETURN:
-        return simpleInstruction("OP_RETURN", offset);
+        result = simpleInstruction("OP_RETURN", offset); break;
       case OP_INHERIT:
-        return simpleInstruction("OP_INHERIT", offset);
+        result = simpleInstruction("OP_INHERIT", offset); break;
       case OP_OBJECT:
-        return constantInstruction("OP_OBJECT", chunk, offset);
+        result = constantInstruction("OP_OBJECT", chunk, offset); break;
       case OP_FIELD:
-        return constantInstruction("OP_FIELD", chunk, offset);
+        result = constantInstruction("OP_FIELD", chunk, offset); break;
       case OP_METHOD:
-        return constantInstruction("OP_METHOD", chunk, offset);
+        result = constantInstruction("OP_METHOD", chunk, offset); break;
       default:
         System.out.println("Unknown opcode: " + instruction);
-
-        return offset + 1;
+        
+        result = offset + 1;
+        
+        break;
     }
-  }
+    
+    return result;
+  } //disassembleInstruction(Chunk, int)
 
   //closureInstruction(String, Chunk, int)
   private int closureInstruction(String name, Chunk chunk, int offset) {

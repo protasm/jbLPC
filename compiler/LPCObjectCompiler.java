@@ -19,6 +19,7 @@ import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_EOF;
 import static jbLPC.scanner.TokenType.TOKEN_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
+import static jbLPC.scanner.TokenType.TOKEN_INHERIT;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_MINUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
@@ -29,6 +30,7 @@ import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
+import jbLPC.util.Props;
 
 public class LPCObjectCompiler extends LPCCompiler {
   //compile(String, String)
@@ -40,7 +42,7 @@ public class LPCObjectCompiler extends LPCCompiler {
       new C_LPCObject(name) //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject....");
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject " + name + ".");
 
     int index = makeConstant(name);
 
@@ -50,7 +52,11 @@ public class LPCObjectCompiler extends LPCCompiler {
     //advance to the first non-error Token (or EOF)
     parser.advance();
 
-    //loop declarations until EOF
+    //loop inherit declarations until exhausted
+    while(parser.match(TOKEN_INHERIT))
+      inherit();
+
+    //loop all remaining declarations until EOF
     while (!parser.match(TOKEN_EOF))
       declaration();
     
@@ -147,7 +153,7 @@ public class LPCObjectCompiler extends LPCCompiler {
   //typedDeclaration()
   @Override
   protected void typedDeclaration() {
-	int index = parseVariable("Expect method or field name.");
+    int index = parseVariable("Expect method or field name.");
 
     if (parser.check(TOKEN_LEFT_PAREN))
       method(index);

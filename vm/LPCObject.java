@@ -7,6 +7,7 @@ public class LPCObject {
   private String name;
   private Map<String, Object> fields;
   private Map<String, Closure> methods;
+  private LPCObject superObj;
 
   //LPCObject(String)
   public LPCObject(String name) {
@@ -31,19 +32,36 @@ public class LPCObject {
     return methods;
   }
 
-  //inheritFields(Map<String, Object>)
-  public void inheritFields(Map<String, Object> fields) {
-    this.fields = new HashMap<String, Object>(fields);
+  //superObj()
+  public LPCObject superObj() {
+    return superObj;
   }
 
-  //inheritMethods(Map<String, Closure>)
-  public void inheritMethods(Map<String, Closure> methods) {
-    this.methods = new HashMap<String, Closure>(methods);
+  //setSuperObj(LPCObject)
+  public void setSuperObj(LPCObject superObj) {
+    this.superObj = superObj;
   }
+
+  //inheritFields(Map<String, Object>)
+  //public void inheritFields(Map<String, Object> fields) {
+  //  this.fields = new HashMap<String, Object>(fields);
+  //}
+
+  //inheritMethods(Map<String, Closure>)
+  //public void inheritMethods(Map<String, Closure> methods) {
+  //  this.methods = new HashMap<String, Closure>(methods);
+  //}
 
   //toString()
   @Override
   public String toString() {
-    return "<obj: " + name + ">";
+    String str = "<obj: " + name;
+
+    if (superObj != null)
+      str = str + " [" + superObj.name() + "]";
+
+    str = str + ">";
+
+    return str;
   }
 }

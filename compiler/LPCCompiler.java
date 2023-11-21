@@ -29,11 +29,11 @@ import static jbLPC.scanner.TokenType.TOKEN_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_FOR;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_IF;
-import static jbLPC.scanner.TokenType.TOKEN_INHERIT;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_BRACE;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_MINUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
+import static jbLPC.scanner.TokenType.TOKEN_PRIMITIVE;
 import static jbLPC.scanner.TokenType.TOKEN_RETURN;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACE;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_PAREN;
@@ -41,12 +41,10 @@ import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STRING;
-import static jbLPC.scanner.TokenType.TOKEN_PRIMITIVE;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
-import jbLPC.parser.parselet.VariableParselet;
 import jbLPC.scanner.Token;
 import jbLPC.util.Props;
 import jbLPC.util.PropsObserver;
@@ -148,7 +146,7 @@ public class LPCCompiler implements PropsObserver {
       new C_Script() //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling Script....");
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiling Script.");
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -194,9 +192,7 @@ public class LPCCompiler implements PropsObserver {
 
   //declaration()
   protected void declaration() {
-    if (parser.match(TOKEN_INHERIT))
-      inherit();
-    else if (parser.match(TOKEN_PRIMITIVE))
+    if (parser.match(TOKEN_PRIMITIVE))
       typedDeclaration();
     else
       statement();
@@ -492,6 +488,10 @@ public class LPCCompiler implements PropsObserver {
     return makeConstant(token.lexeme());
   }
 
+  public int stringConstant(Token token) {
+    return makeConstant(token.lexeme());
+  }
+
   //identifiersEqual(Token, Token)
   private boolean identifiersEqual(Token a, Token b) {
     return a.lexeme().equals(b.lexeme());
@@ -523,11 +523,11 @@ public class LPCCompiler implements PropsObserver {
   }
 
   //inherit()
-  private void inherit() {
+  protected void inherit() {
     parser.consume(TOKEN_STRING, "Expect inherited object name.");
 
-    //at runtime, load inherited object name on stack
-    namedVariable(parser.previous(), false);
+    //add inherited object name to chunk constants
+    stringConstant(parser.previous());
     
     parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
 

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+DIR="$HOME/eclipse-workspace/jbLPC/src/jbLPC"
+
+find $DIR -name "*.class" -type f -delete
