@@ -15,11 +15,7 @@ public class NativeCompileLPCObject extends NativeFn {
   @Override
   public Object execute(Object[] args) {
     String path = (String)args[0];
-    String libPath = vm.getLibPath();
-    String fullPath = libPath + path;
-    SourceFile file  = new SourceFile(fullPath);
-    LPCObjectCompiler compiler = new LPCObjectCompiler();
-    Compilation compilation = compiler.compile(file.getNameNoExt(), file.source());
+    Compilation compilation = vm.compilation(path);
 
     return compilation;
   }

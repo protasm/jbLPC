@@ -38,7 +38,7 @@ public class JBLPC {
       byte[] source = Files.readAllBytes(Paths.get(path));
 
       VM.InterpretResult result = vm.interpret(
-        null,
+        path,
         new String(source, Charset.defaultCharset()),
         false
       );
@@ -82,7 +82,7 @@ public class JBLPC {
        }
 
         //send line to VM for interpreting
-        vm.interpret(null, line, false);
+        vm.interpret(line, line, false);
       } catch (IOException e) {
         exitCode = 1;
         exitMessage = "IOException reading line.";

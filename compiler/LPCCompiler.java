@@ -9,7 +9,6 @@ import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_INHERIT;
 import static jbLPC.compiler.OpCode.OP_JUMP;
 import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.OpCode.OP_LOOP;
@@ -40,7 +39,6 @@ import static jbLPC.scanner.TokenType.TOKEN_RIGHT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
-import static jbLPC.scanner.TokenType.TOKEN_STRING;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import jbLPC.debug.Debugger;
@@ -64,7 +62,7 @@ public class LPCCompiler implements PropsObserver {
   public LPCCompiler() {
     Props.instance().registerObserver(this);
 
-    if (debugPrintProgress) Debugger.instance().printProgress("LPCCompiler initialized.");
+    if (debugPrintProgress) Debugger.instance().printProgress("LPCCompiler initialized");
   }
 
   //addLocal(Token)
@@ -146,7 +144,7 @@ public class LPCCompiler implements PropsObserver {
       new C_Script() //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling Script.");
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiling '" + name + "'");
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -286,7 +284,7 @@ public class LPCCompiler implements PropsObserver {
   }
 
   //emitWord(int)
-  protected void emitWord(int i) {
+  public void emitWord(int i) {
     emitWord((short)i);
   }
 
@@ -489,7 +487,7 @@ public class LPCCompiler implements PropsObserver {
   }
 
   public int stringConstant(Token token) {
-    return makeConstant(token.lexeme());
+    return makeConstant(token.literal());
   }
 
   //identifiersEqual(Token, Token)
@@ -520,32 +518,6 @@ public class LPCCompiler implements PropsObserver {
     if (parser.match(TOKEN_ELSE)) statement();
 
     patchJump(elseJump);
-  }
-
-  //inherit()
-  protected void inherit() {
-    parser.consume(TOKEN_STRING, "Expect inherited object name.");
-
-    //add inherited object name to chunk constants
-    stringConstant(parser.previous());
-    
-    parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
-
-    //TODO
-//    if (identifiersEqual(classToken, parser.previous()))
-//      error("A class can't inherit from itself.");
-
-//    beginScope();
-
-//    addLocal(syntheticToken("super"));
-
-//    defineVariable(0x00);
-
-//    namedVariable(classToken, false);
-
-    emitByte(OP_INHERIT);
-
-//    currentClass.setHasSuperclass(true);
   }
 
   //lowByte(short)
@@ -656,7 +628,8 @@ public class LPCCompiler implements PropsObserver {
     for (int i = scope.locals().size() - 1; i >= 0; i--) {
       Local local = scope.locals().get(i);
 
-      if (identifiersEqual(token, local.token())) {
+      if (identifiersEqual(token, local.token())) { //found
+        //prevent 'var a = a;'
         if (local.depth() == -1) //"sentinel" depth
           parser.error("Can't read local variable in its own initializer.");
 

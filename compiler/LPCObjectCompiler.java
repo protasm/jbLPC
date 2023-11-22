@@ -1,11 +1,13 @@
 package jbLPC.compiler;
 
 import static jbLPC.compiler.OpCode.OP_ADD;
+import static jbLPC.compiler.OpCode.OP_COMPILE_OBJ;
 import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_FIELD;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.OpCode.OP_GET_PROPERTY;
 import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_INHERIT;
 import static jbLPC.compiler.OpCode.OP_METHOD;
 import static jbLPC.compiler.OpCode.OP_MULTIPLY;
 import static jbLPC.compiler.OpCode.OP_NIL;
@@ -26,11 +28,11 @@ import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
+import static jbLPC.scanner.TokenType.TOKEN_STRING;
 
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
-import jbLPC.util.Props;
 
 public class LPCObjectCompiler extends LPCCompiler {
   //compile(String, String)
@@ -42,7 +44,7 @@ public class LPCObjectCompiler extends LPCCompiler {
       new C_LPCObject(name) //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject " + name + ".");
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject '" + name + "'");
 
     int index = makeConstant(name);
 
@@ -98,6 +100,34 @@ public class LPCObjectCompiler extends LPCCompiler {
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration(s).");
   }
 
+  //inherit()
+  protected void inherit() {
+    parser.consume(TOKEN_STRING, "Expect inherited object name.");
+
+    //add inherited object name to chunk constants
+    int index = stringConstant(parser.previous());
+    
+    parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
+
+    //TODO
+//    if (identifiersEqual(classToken, parser.previous()))
+//      error("A class can't inherit from itself.");
+
+//    beginScope();
+
+//    addLocal(syntheticToken("super"));
+
+//    defineVariable(0x00);
+
+//    namedVariable(classToken, false);
+    emitByte(OP_COMPILE_OBJ);
+    emitWord(index);
+
+    emitByte(OP_INHERIT);
+
+//    currentClass.setHasSuperclass(true);
+  }
+
   //method(int)
   private void method(int index) {
     funDeclaration(index);
@@ -122,8 +152,8 @@ public class LPCObjectCompiler extends LPCCompiler {
       getOp = OP_GET_UPVALUE;
       setOp = OP_SET_UPVALUE;
     } else { //field
-      emitByte(OP_GET_LOCAL);
-      emitWord(0); //better way to do this?
+//      emitByte(OP_GET_LOCAL);
+//      emitWord(0); //correct way to do this?
 
       arg = identifierConstant(token);
 

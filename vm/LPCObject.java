@@ -37,20 +37,12 @@ public class LPCObject {
     return superObj;
   }
 
-  //setSuperObj(LPCObject)
-  public void setSuperObj(LPCObject superObj) {
+  //inherit(LPCObject)
+  public void inherit(LPCObject superObj) {
     this.superObj = superObj;
+    this.fields = superObj.fields();
+    this.methods = superObj.methods;
   }
-
-  //inheritFields(Map<String, Object>)
-  //public void inheritFields(Map<String, Object> fields) {
-  //  this.fields = new HashMap<String, Object>(fields);
-  //}
-
-  //inheritMethods(Map<String, Closure>)
-  //public void inheritMethods(Map<String, Closure> methods) {
-  //  this.methods = new HashMap<String, Closure>(methods);
-  //}
 
   //toString()
   @Override

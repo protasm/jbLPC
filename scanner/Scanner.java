@@ -138,7 +138,7 @@ public class Scanner implements PropsObserver, Iterator<Token> {
     if (debugPrintSource)
       Debugger.instance().printSource(ss.toString());
     if (debugPrintProgress)
-      Debugger.instance().printProgress("Scanner initialized.");
+      Debugger.instance().printProgress("Scanner initialized");
   }
 
   // lexToken()

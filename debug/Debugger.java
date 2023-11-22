@@ -4,6 +4,7 @@ import static jbLPC.compiler.OpCode.OP_ADD;
 import static jbLPC.compiler.OpCode.OP_CALL;
 import static jbLPC.compiler.OpCode.OP_CLOSE_UPVALUE;
 import static jbLPC.compiler.OpCode.OP_CLOSURE;
+import static jbLPC.compiler.OpCode.OP_COMPILE_OBJ;
 import static jbLPC.compiler.OpCode.OP_CONSTANT;
 import static jbLPC.compiler.OpCode.OP_DEFINE_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_DIVIDE;
@@ -275,8 +276,10 @@ public class Debugger implements PropsObserver {
         result = constantInstruction("OP_FIELD", chunk, offset); break;
       case OP_METHOD:
         result = constantInstruction("OP_METHOD", chunk, offset); break;
+      case OP_COMPILE_OBJ:
+        result = constantInstruction("OP_COMPILE", chunk, offset); break;
       default:
-        System.out.println("Unknown opcode: " + instruction);
+        System.out.println("Unknown opcode: " + String.format("0x%02X", instruction));
         
         result = offset + 1;
         
@@ -330,16 +333,16 @@ public class Debugger implements PropsObserver {
   //invokeInstruction(String, Chunk, int)
   private int invokeInstruction(String name, Chunk chunk, int offset) {
     short operand = getWordOperand(chunk, offset);
-    Object constant = chunk.constants().get(operand);
+    Object constant = chunk.constants().get(operand); //method name
     byte argCount = getCode(chunk, offset + 3);
 
+    //instruction name, constant index
     System.out.print(String.format("%-16s constant: %d ", name, operand));
 
-    if (constant instanceof String)
-      System.out.print("(\"" + constant + "\")");
-    else
-      System.out.print("(" + constant + ")");
+    //method name
+    System.out.print("(\"" + constant + "\")");
 
+    //argument count
     System.out.print(String.format(" (%d args)\n", argCount));
 
     return offset + 4;

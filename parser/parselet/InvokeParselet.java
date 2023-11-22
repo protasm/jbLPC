@@ -12,6 +12,7 @@ public class InvokeParselet implements Parselet {
   public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
     parser.consume(TOKEN_IDENTIFIER, "Expect method name after '->'.");
 
+    //method name
     int index = compiler.identifierConstant(parser.previous());
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
@@ -19,7 +20,7 @@ public class InvokeParselet implements Parselet {
     byte argCount = compiler.argumentList();
 
     compiler.emitByte(OP_INVOKE);
-    compiler.emitWord((short)index);
+    compiler.emitWord(index); //method name
     compiler.emitByte(argCount);
   }
 }

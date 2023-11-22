@@ -38,6 +38,7 @@ public final class OpCode {
   public static final byte OP_OBJECT        = 0x27;
   public static final byte OP_FIELD         = 0x25;
   public static final byte OP_METHOD        = 0x26;
+  public static final byte OP_COMPILE_OBJ   = 0x28;
 
   //OpCode()
   private OpCode() {}
