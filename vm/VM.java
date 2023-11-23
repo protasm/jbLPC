@@ -38,6 +38,7 @@ import static jbLPC.compiler.OpCode.OP_SUBTRACT;
 import static jbLPC.compiler.OpCode.OP_SUPER_INVOKE;
 import static jbLPC.compiler.OpCode.OP_TRUE;
 
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +107,7 @@ public class VM implements PropsObserver {
   }
 
   //interpret(String)
-  public InterpretResult interpret(String name, String source, boolean asObject) {
+  public InterpretResult interpret(String name, String source) {
     LPCCompiler compiler = new LPCCompiler();
     C_Script cScript = (C_Script)compiler.compile(name, source);
 
@@ -624,9 +625,12 @@ public class VM implements PropsObserver {
     String fullPath = libPath + path;
     SourceFile file  = new SourceFile(fullPath);
     LPCObjectCompiler compiler = new LPCObjectCompiler();
-    Compilation compilation = compiler.compile(file.getNameNoExt(), file.source());
 
-    return compilation;
+    return compiler.compile(
+      Paths.get(file.path()),
+      file.prefix(),
+      file.source()
+    );
   }
 
   //callValue(Object, int)

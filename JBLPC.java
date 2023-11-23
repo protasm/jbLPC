@@ -39,8 +39,7 @@ public class JBLPC {
 
       VM.InterpretResult result = vm.interpret(
         path,
-        new String(source, Charset.defaultCharset()),
-        false
+        new String(source, Charset.defaultCharset())
       );
 
       if (result == VM.InterpretResult.INTERPRET_COMPILE_ERROR)
@@ -82,7 +81,7 @@ public class JBLPC {
        }
 
         //send line to VM for interpreting
-        vm.interpret(line, line, false);
+        vm.interpret(line, line);
       } catch (IOException e) {
         exitCode = 1;
         exitMessage = "IOException reading line.";

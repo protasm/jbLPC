@@ -61,7 +61,7 @@ public class LPCCompiler implements PropsObserver {
   //LPCCompiler()
   public LPCCompiler() {
     Props.instance().registerObserver(this);
-
+    
     if (debugPrintProgress) Debugger.instance().printProgress("LPCCompiler initialized");
   }
 
@@ -486,6 +486,7 @@ public class LPCCompiler implements PropsObserver {
     return makeConstant(token.lexeme());
   }
 
+  //stringConstant(Token)
   public int stringConstant(Token token) {
     return makeConstant(token.literal());
   }

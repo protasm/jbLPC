@@ -270,7 +270,7 @@ public class Parser {
     register(TOKEN_SUPER,         new SuperParselet(),    null,                 PREC_NONE);
     register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
     register(TOKEN_TRUE,          new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_PRIMITIVE,          null,                   null,                 PREC_NONE);
+    register(TOKEN_PRIMITIVE,     null,                   null,                 PREC_NONE);
     register(TOKEN_WHILE,         null,                   null,                 PREC_NONE);
     register(TOKEN_ERROR,         null,                   null,                 PREC_NONE);
     register(TOKEN_EOF,           null,                   null,                 PREC_NONE);

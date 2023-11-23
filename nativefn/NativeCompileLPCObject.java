@@ -1,8 +1,6 @@
 package jbLPC.nativefn;
 
 import jbLPC.compiler.Compilation;
-import jbLPC.compiler.LPCObjectCompiler;
-import jbLPC.util.SourceFile;
 import jbLPC.vm.VM;
 
 public class NativeCompileLPCObject extends NativeFn {

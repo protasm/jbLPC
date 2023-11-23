@@ -30,23 +30,31 @@ import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STRING;
 
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
 
 public class LPCObjectCompiler extends LPCCompiler {
+  public static Map<Path, C_LPCObject> compiledObjects = new HashMap<>();
+  
   //compile(String, String)
-  @Override
-  public Compilation compile(String name, String source) {
+  public C_LPCObject compile(Path path, String prefix, String source) {
+    if (LPCObjectCompiler.compiledObjects.containsKey(path))
+      return LPCObjectCompiler.compiledObjects.get(path);
+
     parser = new Parser(this, source);
     currScope = new Scope(
       null, //enclosing Scope
-      new C_LPCObject(name) //compilation
+      new C_LPCObject(prefix) //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject '" + name + "'");
+    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject '" + prefix + "'");
 
-    int index = makeConstant(name);
+    int index = makeConstant(prefix);
 
     emitByte(OP_OBJECT);
     emitWord(index);
@@ -61,16 +69,22 @@ public class LPCObjectCompiler extends LPCCompiler {
     //loop all remaining declarations until EOF
     while (!parser.match(TOKEN_EOF))
       declaration();
-    
+
     if (parser.hadError())
       return null;
-    
+
+    //end compilation
     emitByte(OP_RETURN);
 
     if (debugPrintComp)
       Debugger.instance().disassembleScope(currScope);
 
-    return currScope.compilation();
+    C_LPCObject compiledObject = (C_LPCObject)currScope.compilation();
+    
+    //store this compilation to avoid future recompilation
+    LPCObjectCompiler.compiledObjects.put(path, compiledObject);
+
+    return compiledObject;
   }
 
   //field()
@@ -79,7 +93,7 @@ public class LPCObjectCompiler extends LPCCompiler {
       expression();
     else
       emitByte(OP_NIL);
-    
+
     defineVariable(index);
 
     emitByte(OP_FIELD);
@@ -103,10 +117,9 @@ public class LPCObjectCompiler extends LPCCompiler {
   //inherit()
   protected void inherit() {
     parser.consume(TOKEN_STRING, "Expect inherited object name.");
-
-    //add inherited object name to chunk constants
-    int index = stringConstant(parser.previous());
     
+    int index = stringConstant(parser.previous());
+
     parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
 
     //TODO
@@ -120,12 +133,18 @@ public class LPCObjectCompiler extends LPCCompiler {
 //    defineVariable(0x00);
 
 //    namedVariable(classToken, false);
+      
     emitByte(OP_COMPILE_OBJ);
     emitWord(index);
 
     emitByte(OP_INHERIT);
 
 //    currentClass.setHasSuperclass(true);
+  }
+
+  //objectConstant(Object)
+  public int objectConstant(Object object) {
+    return makeConstant(object);
   }
 
   //method(int)
@@ -137,13 +156,14 @@ public class LPCObjectCompiler extends LPCCompiler {
   }
 
   //namedVariable(Token, boolean)
-  //generates code to load a variable with the given name onto the vStack.
+  //generates code to load a variable, whose lexeme equals the
+  //given Token's lexeme, onto the vStack.
   @Override
   public void namedVariable(Token token, boolean canAssign) {
     byte getOp;
     byte setOp;
 
-    int arg = resolveLocal(currScope, token);
+    int arg = resolveLocal(currScope, token); //index of local var, or -1
 
     if (arg != -1) { //local variable
       getOp = OP_GET_LOCAL;
@@ -152,8 +172,8 @@ public class LPCObjectCompiler extends LPCCompiler {
       getOp = OP_GET_UPVALUE;
       setOp = OP_SET_UPVALUE;
     } else { //field
-//      emitByte(OP_GET_LOCAL);
-//      emitWord(0); //correct way to do this?
+      emitByte(OP_GET_LOCAL);
+      emitWord(0); //correct way to do this?
 
       arg = identifierConstant(token);
 
