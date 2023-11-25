@@ -1,12 +1,12 @@
 package jbLPC.parser.parselet;
 
+import static jbLPC.compiler.OpCode.OP_SUPER_INVOKE;
+import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
+import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
+
+import jbLPC.compiler.Instruction;
 import jbLPC.compiler.LPCCompiler;
-
-
 import jbLPC.parser.Parser;
-
-import static jbLPC.compiler.OpCode.*;
-import static jbLPC.scanner.TokenType.*;
 
 public class SuperParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
@@ -20,17 +20,21 @@ public class SuperParselet implements Parselet {
 
     parser.consume(TOKEN_IDENTIFIER, "Expect inherited function name.");
 
-    int nameIdx = compiler.identifierConstant(parser.previous());
+    int index = compiler.identifierConstant(parser.previous());
 
     compiler.namedVariable(compiler.syntheticToken("this"), false);
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after function name.");
 
-    byte argCount = compiler.argumentList();
+    int argCount = compiler.argumentList();
+    
     compiler.namedVariable(compiler.syntheticToken("super"), false);
 
-    compiler.emitByte(OP_SUPER_INVOKE);
-    compiler.emitWord((short)nameIdx);
-    compiler.emitByte(argCount);
+    Instruction instr = new Instruction(
+      OP_SUPER_INVOKE,
+      new Object[] { index, argCount }
+    );
+    
+    compiler.emitInstruction(instr);
   }
 }

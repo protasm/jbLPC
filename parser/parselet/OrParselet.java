@@ -1,10 +1,12 @@
 package jbLPC.parser.parselet;
 
+import static jbLPC.compiler.OpCode.OP_JUMP;
+import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
+import static jbLPC.compiler.OpCode.OP_POP;
+import static jbLPC.parser.Parser.Precedence.PREC_OR;
+
 import jbLPC.compiler.LPCCompiler;
 import jbLPC.parser.Parser;
-
-import static jbLPC.compiler.OpCode.*;
-import static jbLPC.parser.Parser.Precedence.*;
 
 public class OrParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
@@ -13,9 +15,11 @@ public class OrParselet implements Parselet {
     int endJump = compiler.emitJump(OP_JUMP);
 
     compiler.patchJump(elseJump);
-    compiler.emitByte(OP_POP);
+    
+    compiler.emitInstruction(OP_POP);
 
     parser.parsePrecedence(PREC_OR);
+    
     compiler.patchJump(endJump);
   }
 }

@@ -12,15 +12,15 @@ public class LiteralParselet implements Parselet {
   public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
     switch (parser.previous().type()) {
       case TOKEN_FALSE:
-        compiler.emitByte(OP_FALSE);
+        compiler.emitInstruction(OP_FALSE);
 
         break;
       case TOKEN_NIL:
-        compiler.emitByte(OP_NIL);
+        compiler.emitInstruction(OP_NIL);
 
         break;
       case TOKEN_TRUE:
-        compiler.emitByte(OP_TRUE);
+        compiler.emitInstruction(OP_TRUE);
 
         break;
       default: //Unreachable

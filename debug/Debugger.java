@@ -1,49 +1,12 @@
 package jbLPC.debug;
 
-import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_CALL;
-import static jbLPC.compiler.OpCode.OP_CLOSE_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_CLOSURE;
-import static jbLPC.compiler.OpCode.OP_COMPILE_OBJ;
-import static jbLPC.compiler.OpCode.OP_CONSTANT;
-import static jbLPC.compiler.OpCode.OP_DEFINE_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_DIVIDE;
-import static jbLPC.compiler.OpCode.OP_EQUAL;
-import static jbLPC.compiler.OpCode.OP_FALSE;
-import static jbLPC.compiler.OpCode.OP_FIELD;
-import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_GET_SUPER;
-import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_GREATER;
-import static jbLPC.compiler.OpCode.OP_INHERIT;
-import static jbLPC.compiler.OpCode.OP_INVOKE;
-import static jbLPC.compiler.OpCode.OP_JUMP;
-import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
-import static jbLPC.compiler.OpCode.OP_LESS;
-import static jbLPC.compiler.OpCode.OP_LOOP;
-import static jbLPC.compiler.OpCode.OP_METHOD;
-import static jbLPC.compiler.OpCode.OP_MULTIPLY;
-import static jbLPC.compiler.OpCode.OP_NEGATE;
-import static jbLPC.compiler.OpCode.OP_NIL;
-import static jbLPC.compiler.OpCode.OP_NOT;
-import static jbLPC.compiler.OpCode.OP_OBJECT;
-import static jbLPC.compiler.OpCode.OP_POP;
-import static jbLPC.compiler.OpCode.OP_RETURN;
-import static jbLPC.compiler.OpCode.OP_SET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_SET_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_SUBTRACT;
-import static jbLPC.compiler.OpCode.OP_SUPER_INVOKE;
-import static jbLPC.compiler.OpCode.OP_TRUE;
-
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.Chunk;
+import jbLPC.compiler.Instruction;
+import jbLPC.compiler.OpCode;
 import jbLPC.compiler.Scope;
 import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Props;
@@ -58,13 +21,18 @@ public class Debugger implements PropsObserver {
   private boolean printLines;
   private boolean printLocals;
   private boolean printUpvalues;
-  private boolean printOpCode;
+  private boolean printCode;
   private boolean printStack;
 
-  static private Debugger _instance; //singleton
+  private static Debugger _instance; //singleton
+
+  private static final String COLOR_RESET = "\033[0m";
+  private static final String COLOR_RED = "\033[31m";
+  private static final String COLOR_GREEN = "\033[32m";
+  private static final String COLOR_CYAN = "\033[36m";
 
   //Debugger()
-  private Debugger() {
+   private Debugger() {
     Props.instance().registerObserver(this);
   }
 
@@ -101,21 +69,21 @@ public class Debugger implements PropsObserver {
     
     //Print Globals array
     if (printGlobals) {
-      System.out.print("Globals: ");
+      System.out.print(Debugger.COLOR_CYAN + "Globals: ");
 
       System.out.print(
         globals.entrySet()
-               .stream()
-               .filter(item -> !(item.getValue() instanceof NativeFn))
-               .collect(Collectors.toList())
+          .stream()
+          .filter(item -> !(item.getValue() instanceof NativeFn))
+          .collect(Collectors.toList())
       );
 
-      System.out.print("\n");
+      System.out.print(Debugger.COLOR_RESET + "\n");
     }
 
     //Print Stack values array
     if (printStack) {
-      System.out.print("Stack: ");
+      System.out.print(Debugger.COLOR_GREEN + "Stack: ");
 
       for (int i = 0; i < stackValues.length; i++) {
         Object stackValue = stackValues[i];
@@ -127,7 +95,7 @@ public class Debugger implements PropsObserver {
 
       }
 
-      System.out.print("\n");
+      System.out.print(Debugger.COLOR_RESET + "\n");
     } //if (printStack)
 
     disassembleInstruction(frame.closure().compilation().chunk(), frame.ip());
@@ -140,7 +108,7 @@ public class Debugger implements PropsObserver {
     printBanner(scope.compilation().toString());
 
     if (printCodes) {
-      System.out.println("Codes: " + chunk.printCodes());
+      System.out.println("Codes: " + COLOR_RED + chunk.instructions() + COLOR_RESET);
 
       if (printLines)
         System.out.println("Lines: " + chunk.lines());
@@ -172,8 +140,8 @@ public class Debugger implements PropsObserver {
     if (printUpvalues)
       System.out.println("Upvalues: " + scope.upvalues());
 
-    for (int offset = 0; offset < chunk.opCodes().size();)
-      offset = disassembleInstruction(chunk, offset);
+    for (Instruction instr : chunk.instructions())
+      disassembleInstruction(instr);
   }
 
   public void printBanner(String text) {
@@ -181,119 +149,116 @@ public class Debugger implements PropsObserver {
     System.out.println("== " + text + " ==");
   }
 
-  //disassembleInstruction(Chunk, int)
-  public int disassembleInstruction(Chunk chunk, int offset) {
-    byte instruction = getCode(chunk, offset);
-    int result;
-    
-    System.out.print("Instr: ");
+  //disassembleInstruction(Instruction)
+  public void disassembleInstruction(Instruction instr) {
+    //OpCode offset
+//    System.out.print(String.format("%04d", offset));
 
-    System.out.print(String.format("%04d", offset));
+    //Line number
+//    if (
+//      (offset > 0) &&
+//      (chunk.lines().get(offset) == chunk.lines().get(offset - 1))
+//    )
+//      System.out.print("   | ");
+//    else
+//      System.out.print(String.format("%4d ", chunk.lines().get(offset)));
+    System.out.print(String.format("%4d", instr.line()));
 
-    if (
-      (offset > 0) &&
-      (chunk.lines().get(offset) == chunk.lines().get(offset - 1))
-    )
-      System.out.print("   | ");
-    else
-      System.out.print(String.format("%4d ", chunk.lines().get(offset)));
+    //Code
+    if (printCode)
+      System.out.print("(" + COLOR_RED + String.format("%02d", instr.opCode().code()) + COLOR_RESET + ") ");
 
-    if (printOpCode)
-      System.out.print("(" + String.format("0x%02X", instruction) + ") ");
-
-    switch (instruction) {
-      case OP_CONSTANT:
-        result = constantInstruction("OP_CONSTANT", chunk, offset); break;
+    switch (instr.opCode()) {
+      case OP_CONST:
+        constantInstruction(instr); break;
       case OP_NIL:
-        result = simpleInstruction("OP_NIL", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_TRUE:
-        result = simpleInstruction("OP_TRUE", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_FALSE:
-        result = simpleInstruction("OP_FALSE", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_POP:
-        result = simpleInstruction("OP_POP", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_GET_LOCAL:
-        result = wordOperandInstruction("OP_GET_LOCAL", chunk, offset); break;
+        wordOperandInstruction(opCode, chunk, offset); break;
       case OP_SET_LOCAL:
-        result = wordOperandInstruction("OP_SET_LOCAL", chunk, offset); break;
-      case OP_DEFINE_GLOBAL:
-        result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); break;
+        wordOperandInstruction(opCode, chunk, offset); break;
+      case OP_GLOBAL:
+        constantInstruction(opCode, chunk, offset); break;
       case OP_GET_GLOBAL:
-        result = constantInstruction("OP_GET_GLOBAL", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
       case OP_SET_GLOBAL:
-        result = constantInstruction("OP_SET_GLOBAL", chunk, offset); break;
-      case OP_GET_UPVALUE:
-        result = wordOperandInstruction("OP_GET_UPVALUE", chunk, offset); break;
-      case OP_SET_UPVALUE:
-        result = wordOperandInstruction("OP_SET_UPVALUE", chunk, offset); break;
-      case OP_GET_PROPERTY:
-        result = constantInstruction("OP_GET_PROPERTY", chunk, offset); break;
-      case OP_SET_PROPERTY:
-        result = constantInstruction("OP_SET_PROPERTY", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
+      case OP_GET_UPVAL:
+        wordOperandInstruction(opCode, chunk, offset); break;
+      case OP_SET_UPVAL:
+        wordOperandInstruction(opCode, chunk, offset); break;
+      case OP_GET_PROP:
+        constantInstruction(opCode, chunk, offset); break;
+      case OP_SET_PROP:
+        constantInstruction(opCode, chunk, offset); break;
       case OP_GET_SUPER:
-        result = constantInstruction("OP_GET_SUPER", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
       case OP_EQUAL:
-        result = simpleInstruction("OP_EQUAL", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_GREATER:
-        result = simpleInstruction("OP_GREATER", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_LESS:
-        result = simpleInstruction("OP_LESS", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_ADD:
-        result = simpleInstruction("OP_ADD", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_SUBTRACT:
-        result = simpleInstruction("OP_SUBTRACT", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_MULTIPLY:
-        result = simpleInstruction("OP_MULTIPLY", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_DIVIDE:
-        result = simpleInstruction("OP_DIVIDE", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_NOT:
-        result = simpleInstruction("OP_NOT", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_NEGATE:
-        result = simpleInstruction("OP_NEGATE", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_JUMP:
-        result = jumpInstruction("OP_JUMP", 1, chunk, offset); break;
+        jumpInstruction(opCode, 1, chunk, offset); break;
       case OP_JUMP_IF_FALSE:
-        result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); break;
+        jumpInstruction(opCode, 1, chunk, offset); break;
       case OP_LOOP:
-        result = jumpInstruction("OP_LOOP", -1, chunk, offset); break;
+        jumpInstruction(opCode, -1, chunk, offset); break;
       case OP_CALL:
-        result = byteOperandInstruction("OP_CALL", chunk, offset, "# args:"); break;
+        byteOperandInstruction(opCode, chunk, offset); break;
       case OP_INVOKE:
-        result = invokeInstruction("OP_INVOKE", chunk, offset); break;
+        invokeInstruction(opCode, chunk, offset); break;
       case OP_SUPER_INVOKE:
-        result = invokeInstruction("OP_SUPER_INVOKE", chunk, offset); break;
+        invokeInstruction(opCode, chunk, offset); break;
       case OP_CLOSURE:
-        result = closureInstruction("OP_CLOSURE", chunk, offset); break;
-      case OP_CLOSE_UPVALUE:
-        result = simpleInstruction("OP_CLOSE_UPVALUE", offset); break;
+        closureInstruction(opCode, chunk, offset); break;
+      case OP_CLOSE_UPVAL:
+        simpleInstruction(opCode, offset); break;
       case OP_RETURN:
-        result = simpleInstruction("OP_RETURN", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_INHERIT:
-        result = simpleInstruction("OP_INHERIT", offset); break;
+        simpleInstruction(opCode, offset); break;
       case OP_OBJECT:
-        result = constantInstruction("OP_OBJECT", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
       case OP_FIELD:
-        result = constantInstruction("OP_FIELD", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
       case OP_METHOD:
-        result = constantInstruction("OP_METHOD", chunk, offset); break;
-      case OP_COMPILE_OBJ:
-        result = constantInstruction("OP_COMPILE", chunk, offset); break;
+        constantInstruction(opCode, chunk, offset); break;
+      case OP_COMPILE:
+        constantInstruction(opCode, chunk, offset); break;
       default:
-        System.out.println("Unknown opcode: " + String.format("0x%02X", instruction));
+        System.out.println("Unknown opcode: " + String.format("0x%02X", opCode));
         
-        result = offset + 1;
+        offset + 1;
         
         break;
     }
-    
-    return result;
-  } //disassembleInstruction(Chunk, int)
+  }
 
-  //closureInstruction(String, Chunk, int)
-  private int closureInstruction(String name, Chunk chunk, int offset) {
-    short operand = getWordOperand(chunk, offset);
+  //closureInstruction(OpCode, Chunk, int)
+  private int closureInstruction(OpCode opCode, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s constant: %d ", name, operand));
+    System.out.print(String.format("%-16s constant: %d ", opCode, operand));
 
     C_Function function = (C_Function)chunk.constants().get(operand);
 
@@ -303,7 +268,7 @@ public class Debugger implements PropsObserver {
 
     for (int j = 0; j < function.upvalueCount(); j++) {
       boolean isLocal = (getCode(chunk, offset++) != 0);
-      byte index = getCode(chunk, offset++);
+      Integer index = getCode(chunk, offset++);
 
       System.out.print(String.format(
         "%04d      |                     %s %d\n",
@@ -314,30 +279,36 @@ public class Debugger implements PropsObserver {
     return offset;
   }
 
-  //constantInstruction(String, Chunk, int)
-  private int constantInstruction(String name, Chunk chunk, int offset) {
-    short operand = getWordOperand(chunk, offset);
-
-    System.out.print(String.format("%-16s constant: %d ", name, operand));
+  //constantInstruction(OpCode, Chunk, int)
+  private int constantInstruction(OpCode opCode, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
 
     Object constant = chunk.constants().get(operand);
 
+    System.out.print(String.format("%-16s ", opCode));
+
     if (constant instanceof String)
-      System.out.print("(\"" + constant + "\")\n");
+      System.out.print("\"" + constant + "\" ");
     else
-      System.out.print("(" + constant + ")\n");
+      System.out.print("" + constant + " ");
+
+    System.out.print(String.format("<==slot: " + COLOR_RED + "%02d" + COLOR_RESET + "\n", operand));
 
     return offset + 3;
   }
 
-  //invokeInstruction(String, Chunk, int)
-  private int invokeInstruction(String name, Chunk chunk, int offset) {
-    short operand = getWordOperand(chunk, offset);
+  //invokeInstruction(OpCode, Chunk, int)
+  private int invokeInstruction(OpCode opCode, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
     Object constant = chunk.constants().get(operand); //method name
-    byte argCount = getCode(chunk, offset + 3);
+    Integer argCount = getCode(chunk, offset + 3);
 
     //instruction name, constant index
-    System.out.print(String.format("%-16s constant: %d ", name, operand));
+    System.out.print(
+      String.format("%-16s constant: %d ",
+      opCode,
+      operand)
+    );
 
     //method name
     System.out.print("(\"" + constant + "\")");
@@ -348,58 +319,49 @@ public class Debugger implements PropsObserver {
     return offset + 4;
   }
 
-  //simpleInstruction(String, int)
-  private int simpleInstruction(String name, int offset) {
-    System.out.println(String.format("%-16s", name));
+  //simpleInstruction(OpCode, int)
+  private int simpleInstruction(OpCode opCode, int offset) {
+    System.out.println(String.format("%-16s", opCode));
 
     return offset + 1;
   }
 
-  //byteOperandInstruction(String, Chunk, int, String)
-  private int byteOperandInstruction(String name, Chunk chunk, int offset, String hint) {
-    byte operand = getByteOperand(chunk, offset);
+  //byteOperandInstruction(OpCode, Chunk, int, String)
+  private int byteOperandInstruction(OpCode opCode, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s %s %d ", name, hint, operand));
-    System.out.print("\n");
+    System.out.println(String.format("%-16s %s %d", opCode, operand));
 
     return offset + 2;
   }
 
-  //wordOperandInstruction(String, Chunk, int)
-  private int wordOperandInstruction(String name, Chunk chunk, int offset) {
-    short operand = getWordOperand(chunk, offset);
+  //wordOperandInstruction(OpCode, Chunk, int)
+  private int wordOperandInstruction(OpCode opCode, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
 
-    System.out.print(String.format("%-16s %4d\n", name, operand));
+    System.out.print(String.format("%-16s %4d\n", opCode, operand));
 
     return offset + 3;
   }
 
-  //jumpInstruction(String, int, Chunk, int)
-  private int jumpInstruction(String name, int sign, Chunk chunk, int offset) {
-    short operand = getWordOperand(chunk, offset);
+  //jumpInstruction(OpCode, int, Chunk, int)
+  private int jumpInstruction(OpCode opCode, int sign, Chunk chunk, int offset) {
+    Integer operand = getOperand(chunk, offset);
 
     System.out.print(String.format("%-16s %4d -> %d\n",
-      name, offset, offset + 3 + (sign * operand)));
+      opCode, offset, offset + 3 + (sign * operand)));
 
     return offset + 3;
   }
 
   //getCode(Chunk, int)
-  private byte getCode(Chunk chunk, int offset) {
-    return chunk.opCodes().get(offset);
+  private Instruction getCode(Chunk chunk, int offset) {
+    return chunk.instructions().get(offset);
   }
 
-  //getByteOperand(Chunk, int)
-  private byte getByteOperand(Chunk chunk, int offset) {
-    return chunk.opCodes().get(offset + 1);
-  }
-
-  //getWordOperand(Chunk, int)
-  private short getWordOperand(Chunk chunk, int offset) {
-    byte hi = (byte)chunk.opCodes().get(offset + 1);
-    byte lo = (byte)chunk.opCodes().get(offset + 2);
-
-    return (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
+  //getOperand(Chunk, int)
+  private Instruction getOperand(Chunk chunk, int offset) {
+    return chunk.instructions().get(offset + 1);
   }
 
   //updateCachedProperties()
@@ -410,7 +372,7 @@ public class Debugger implements PropsObserver {
     printLines = Props.instance().getBool("DEBUG_LINES");
     printLocals = Props.instance().getBool("DEBUG_LOCALS");
     printUpvalues = Props.instance().getBool("DEBUG_UPVALS");
-    printOpCode = Props.instance().getBool("DEBUG_OPCODE");
+    printCode = Props.instance().getBool("DEBUG_CODE");
     printStack = Props.instance().getBool("DEBUG_STACK");
   }
 

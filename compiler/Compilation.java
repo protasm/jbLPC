@@ -1,13 +1,16 @@
 package jbLPC.compiler;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public abstract class Compilation {
   protected String name;
-  private Chunk chunk;
+  private List<Instruction> instructions;
 
   //Compilation(String)
   public Compilation(String name) {
     this.name = name;
-    chunk = new Chunk();
+    instructions = new ArrayList<>();
   }
 
   //name()
@@ -15,9 +18,9 @@ public abstract class Compilation {
     return name;
   }
 
-  //chunk()
-  public Chunk chunk() {
-    return chunk;
+  //instructions()
+  public List<Instruction> instructions() {
+    return instructions;
   }
 
   //toString()

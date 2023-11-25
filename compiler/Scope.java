@@ -10,7 +10,7 @@ public class Scope {
   private Scope enclosing;
   private Compilation compilation;
   private Stack<Local> locals;
-  private List<Upvalue> upvalues;
+  private List<CompilerUpvalue> compilerUpvalues;
   private int depth; //the number of surrounding blocks
 
   //Scope(Scope, Compilation)
@@ -19,7 +19,7 @@ public class Scope {
 
     this.compilation = compilation;
     locals = new Stack<>();
-    upvalues = new ArrayList<>();
+    compilerUpvalues = new ArrayList<>();
     depth = 0;
 
     //Block out stack slot zero for the compilation being called.
@@ -59,8 +59,8 @@ public class Scope {
   }
 
   //upvalues()
-  public List<Upvalue> upvalues() {
-    return upvalues;
+  public List<CompilerUpvalue> compilerUpvalues() {
+    return compilerUpvalues;
   }
 
   //markTopLocalInitialized()
@@ -69,15 +69,15 @@ public class Scope {
   }
 
   //addUpvalue(Upvalue)
-  public int addUpvalue(Upvalue upvalue) {
-    upvalues.add(upvalue);
+  public int addUpvalue(CompilerUpvalue compilerUpvalue) {
+    compilerUpvalues.add(compilerUpvalue);
 
     //return index of newly-added upvalue
-    return upvalues.size() - 1;
+    return compilerUpvalues.size() - 1;
   }
 
   //getUpvalue(int)
-  public Upvalue getUpvalue(int index) {
-    return upvalues.get(index);
+  public CompilerUpvalue getUpvalue(int index) {
+    return compilerUpvalues.get(index);
   }
 }

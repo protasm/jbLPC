@@ -155,10 +155,10 @@ public class JBLPC {
       put("locals",  new Pair<String>("DEBUG_LOCALS",  "Print Locals in current scope [requires 'comp']"));
       put("upvals",  new Pair<String>("DEBUG_UPVALS",  "Print Upvalues for function in current scope [requires 'comp']"));
       put("source",  new Pair<String>("DEBUG_SOURCE",  "Print source code being interpreted"));
-      put("opcode",  new Pair<String>("DEBUG_OPCODE",  "Prefix hex values of OpCodes"));
+      put("code",    new Pair<String>("DEBUG_CODE",    "Print int value of code before OpCode"));
       put("comp",    new Pair<String>("DEBUG_COMP",    "Print compiled Function in current scope"));
-      put("codes",   new Pair<String>("DEBUG_CODES",   "Print codes for Chunk in current scope [requires 'comp']"));
-      put("lines",   new Pair<String>("DEBUG_LINES",   "Print source lines for Chunk codes in current scope [requires 'comp']"));
+      put("codes",   new Pair<String>("DEBUG_CODES",   "Print all codes in current scope [requires 'comp']"));
+      put("lines",   new Pair<String>("DEBUG_LINES",   "Print source lines for codes in current scope [requires 'comp']"));
     }};
   }
 

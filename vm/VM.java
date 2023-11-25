@@ -1,43 +1,5 @@
 package jbLPC.vm;
 
-import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_CALL;
-import static jbLPC.compiler.OpCode.OP_CLOSE_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_CLOSURE;
-import static jbLPC.compiler.OpCode.OP_COMPILE_OBJ;
-import static jbLPC.compiler.OpCode.OP_CONSTANT;
-import static jbLPC.compiler.OpCode.OP_DEFINE_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_DIVIDE;
-import static jbLPC.compiler.OpCode.OP_EQUAL;
-import static jbLPC.compiler.OpCode.OP_FALSE;
-import static jbLPC.compiler.OpCode.OP_FIELD;
-import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_GREATER;
-import static jbLPC.compiler.OpCode.OP_INHERIT;
-import static jbLPC.compiler.OpCode.OP_INVOKE;
-import static jbLPC.compiler.OpCode.OP_JUMP;
-import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
-import static jbLPC.compiler.OpCode.OP_LESS;
-import static jbLPC.compiler.OpCode.OP_LOOP;
-import static jbLPC.compiler.OpCode.OP_METHOD;
-import static jbLPC.compiler.OpCode.OP_MULTIPLY;
-import static jbLPC.compiler.OpCode.OP_NEGATE;
-import static jbLPC.compiler.OpCode.OP_NIL;
-import static jbLPC.compiler.OpCode.OP_NOT;
-import static jbLPC.compiler.OpCode.OP_OBJECT;
-import static jbLPC.compiler.OpCode.OP_POP;
-import static jbLPC.compiler.OpCode.OP_RETURN;
-import static jbLPC.compiler.OpCode.OP_SET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_SET_UPVALUE;
-import static jbLPC.compiler.OpCode.OP_SUBTRACT;
-import static jbLPC.compiler.OpCode.OP_SUPER_INVOKE;
-import static jbLPC.compiler.OpCode.OP_TRUE;
-
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +9,9 @@ import java.util.Stack;
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.C_Script;
 import jbLPC.compiler.Compilation;
+import jbLPC.compiler.CompilerUpvalue;
 import jbLPC.compiler.HasArity;
+import jbLPC.compiler.Instruction;
 import jbLPC.compiler.LPCCompiler;
 import jbLPC.compiler.LPCObjectCompiler;
 import jbLPC.debug.Debugger;
@@ -115,13 +79,13 @@ public class VM implements PropsObserver {
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
     if (debugPrintProgress)
-      Debugger.instance().printProgress("Executing '" + name + "'");
+      Debugger.instance().printProgress("Executing script '" + name + "'");
 
     Closure closure = new Closure(cScript);
 
     vStack.push(closure);
 
-    call(closure, 0); //pushes new CallFrame on fStack
+    frame(closure, 0); //pushes new CallFrame on fStack
 
     return run();
   }
@@ -131,28 +95,25 @@ public class VM implements PropsObserver {
     CallFrame frame = fStack.peek(); //cached copy of current CallFrame
     
     //reusable scratchpad vars
-    String key;
+    int offset, argCount;
+    String key, identifier;
     Object value;
-    String identifier;
-    short offset;
-    int argCount;
     Closure closure;
     LPCObject lpcObject;
     Upvalue upvalue;
 
     //Bytecode dispatch loop.
     for (;;) {
-      //Prior pass may have stacked a compileable object on
-      //the vStack; if so, run that compilation before continuing
-      //with execution.
+      //Prior pass may have left a new compilation on
+      //the vStack; if so, frame it up to be run immediately.
       if (vStack.peek() instanceof Compilation) {
-        if (debugPrintProgress) {
-          String compilationName = ((Compilation)vStack.peek()).name();
-          Debugger.instance().printProgress("Executing '" + compilationName + "'");
-        }
+        Compilation compilation = (Compilation)vStack.peek();
         
-    	  callValue(vStack.peek(), 0);
-    	  
+        if (debugPrintProgress)
+          Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
+        
+    	  frame(new Closure(compilation), 0);
+
     	  frame = fStack.peek();
     	
     	  vStack.pop();
@@ -163,26 +124,26 @@ public class VM implements PropsObserver {
       if (debugTraceExecution)
         Debugger.instance().traceExecution(frame, globals, vStack.toArray());
       
-      byte opCode = readChunkOpCodeByte(frame);
+      Instruction instr = readInstruction(frame);
 
-      switch (opCode) {
-        case OP_CONSTANT:
-          value = readChunkConstant(frame);
+      switch (instr.opCode()) {
+        case OP_CONST:
+          value = instr.constants()[0];
 
           vStack.push(value);
 
           break;
         
-        case OP_NIL:   vStack.push(null); break;
+        case OP_NIL: vStack.push(null); break;
         
-        case OP_TRUE:  vStack.push(true); break;
+        case OP_TRUE: vStack.push(true); break;
         
         case OP_FALSE: vStack.push(false); break;
         
-        case OP_POP:   vStack.pop(); break;
+        case OP_POP: vStack.pop(); break;
         
         case OP_GET_LOCAL:
-          offset = readChunkOpCodeWord(frame);
+          offset = (int)instr.constants()[0];
           value = vStack.get(frame.base() + offset);
 
           vStack.push(value);
@@ -190,15 +151,15 @@ public class VM implements PropsObserver {
           break;
         
         case OP_SET_LOCAL:
-          offset = readChunkOpCodeWord(frame);
+          offset = (int)instr.constants()[0];
           value = vStack.peek();
 
           vStack.set(frame.base() + offset, value);
 
           break;
         
-        case OP_DEFINE_GLOBAL: //Add Object to globals
-          key = readChunkConstantAsString(frame);
+        case OP_GLOBAL:
+          key = (String)instr.constants()[0];
           value = vStack.peek();
 
           globals.put(key, value);
@@ -207,8 +168,8 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_GET_GLOBAL: //Get Object from globals
-          key = readChunkConstantAsString(frame);
+        case OP_GET_GLOBAL:
+          key = (String)instr.constants()[0];
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -219,8 +180,8 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_SET_GLOBAL: //Set Object to new value in globals
-          key = readChunkConstantAsString(frame);
+        case OP_SET_GLOBAL:
+          key = (String)instr.constants()[0];
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -232,8 +193,8 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_GET_UPVALUE:
-          offset = readChunkOpCodeWord(frame); //upvalue slot
+        case OP_GET_UPVAL:
+          offset = (int)instr.constants()[0]; //upvalue slot
           upvalue = frame.closure().upvalues()[offset];
 
           if (upvalue.location() != -1) //i.e., open
@@ -243,8 +204,8 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_SET_UPVALUE:
-          offset = readChunkOpCodeWord(frame); //upvalue slot
+        case OP_SET_UPVAL:
+          offset = (int)instr.constants()[0];
           upvalue = frame.closure().upvalues()[offset];
           value = vStack.peek();
 
@@ -254,118 +215,21 @@ public class VM implements PropsObserver {
             upvalue.setClosedValue(value);
 
           break;
-        
-        case OP_EQUAL:
-          equate();
 
-          break;
-        
-        case OP_GREATER:
-          if (!twoNumericOperands())
-            return errorTwoNumbers();
-
-          binaryOp(Operation.OPERATION_GT);
-
-          break;
-        
-        case OP_LESS:
-          if (!twoNumericOperands())
-            return errorTwoNumbers();
-
-          binaryOp(Operation.OPERATION_LT);
-
-          break;
-        
-        case OP_ADD:
-          if (twoStringOperands())
-            concatenate();
-          else if (twoNumericOperands())
-            binaryOp(Operation.OPERATION_PLUS);
-          else
-            return errorTwoNumbersOrStrings();
-
-          break;
-        
-        case OP_SUBTRACT:
-          if (!twoNumericOperands())
-            return errorTwoNumbers();
-
-          binaryOp(Operation.OPERATION_SUBTRACT);
-
-          break;
-        
-        case OP_MULTIPLY:
-          if (!twoNumericOperands())
-            return errorTwoNumbers();
-
-          binaryOp(Operation.OPERATION_MULT);
-
-          break;
-        
-        case OP_DIVIDE:
-          if (!twoNumericOperands())
-            return errorTwoNumbers();
-
-          binaryOp(Operation.OPERATION_DIVIDE);
-
-          break;
-        
-        case OP_NOT:
-          value = vStack.pop();
-          
-          vStack.push(isFalsey(value));
-
-          break;
-        
-        case OP_NEGATE:
-          if (!oneNumericOperand())
-            return errorOneNumber();
-          
-          value = vStack.pop();
-
-          vStack.push(-(double)value);
-
-          break;
-        
-        case OP_JUMP:
-          offset = readChunkOpCodeWord(frame);
-
-          frame.setIP(frame.ip() + offset);
-
-          break;
-        
-        case OP_JUMP_IF_FALSE:
-          offset = readChunkOpCodeWord(frame);
-          value = vStack.peek();
-
-          if (isFalsey(value))
-            frame.setIP(frame.ip() + offset);
-
-          break;
-        
-        case OP_LOOP:
-          offset = readChunkOpCodeWord(frame);
-
-          frame.setIP(frame.ip() - offset);
-
-          break;
-        
         case OP_CALL:
-          argCount = readChunkOpCodeByte(frame);
+          argCount = (int)instr.constants()[0];
           value = vStack.get(vStack.size() - 1 - argCount); //callee
 
           if (!callValue(value, argCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          //callValue should have pushed a new CallFrame (via call()),
-          //so update locally cached frame
           frame = fStack.peek();
 
           break;
         
         case OP_INVOKE:
-          identifier = readChunkConstantAsString(frame); //method name
-          argCount = readChunkOpCodeByte(frame);
+          identifier = (String)instr.constants()[0]; //method name
+          argCount = (int)instr.constants()[1];
 
           if (!invoke(identifier, argCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -377,8 +241,8 @@ public class VM implements PropsObserver {
           break;
         
         case OP_SUPER_INVOKE:
-          identifier = readChunkConstantAsString(frame); //method name
-          argCount = readChunkOpCodeByte(frame);
+          identifier = (String)instr.constants()[0]; //method name
+          argCount = (int)instr.constants()[0];
           lpcObject = (LPCObject)vStack.pop(); //super object
 
           if (!invokeFromObject(lpcObject, identifier, argCount))
@@ -391,16 +255,17 @@ public class VM implements PropsObserver {
           break;
         
         case OP_CLOSURE:
-          C_Function cFunction = (C_Function)readChunkConstant(frame);
+          C_Function cFunction = (C_Function)instr.constants()[0];
+          CompilerUpvalue[] compilerUpvalues = (CompilerUpvalue[])instr.constants()[1];
           closure = new Closure(cFunction);
 
           vStack.push(closure);
 
           for (int i = 0; i < closure.upvalueCount(); i++) {
-            byte isLocal = readChunkOpCodeByte(frame);
-            byte index = readChunkOpCodeByte(frame);
-
-            if (isLocal != 0)
+            boolean isLocal = compilerUpvalues[i].isLocal();
+            int index = compilerUpvalues[i].index();
+            
+            if (isLocal)
               closure.upvalues()[i] = captureUpvalue(frame.base() + index);
             else
               closure.upvalues()[i] = frame.closure().upvalues()[index];
@@ -408,7 +273,7 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_CLOSE_UPVALUE:
+        case OP_CLOSE_UPVAL:
           //close the upvalue at the top of the vStack
           closeUpvalues(vStack.size() - 1);
 
@@ -445,8 +310,8 @@ public class VM implements PropsObserver {
 
           break;
         
-        case OP_COMPILE_OBJ:
-          identifier = readChunkConstantAsString(frame);
+        case OP_COMPILE:
+          identifier = (String)instr.constants()[0];
           Compilation compilation = compilation(identifier);
 
           vStack.push(compilation);
@@ -479,16 +344,16 @@ public class VM implements PropsObserver {
           vStack.pop(); // Inheriting object.
 
           break;
-        
+
         case OP_OBJECT: //Create a new, empty LPCObject
-          identifier = readChunkConstantAsString(frame);
+          identifier = (String)instr.constants()[0];
           lpcObject = new LPCObject(identifier);
 
           vStack.push(lpcObject);
 
           break;
         
-        case OP_GET_PROPERTY:
+        case OP_GET_PROP:
           value = vStack.peek();
 
           if (!(value instanceof LPCObject)) {
@@ -497,7 +362,7 @@ public class VM implements PropsObserver {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
           
-          key = readChunkConstantAsString(frame);
+          key = (String)instr.constants()[0];
           lpcObject = (LPCObject)value;
 
           //Look first for a matching field.
@@ -526,7 +391,7 @@ public class VM implements PropsObserver {
           
           return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-        case OP_SET_PROPERTY:
+        case OP_SET_PROP:
           value = vStack.get(vStack.size() - 2);
 
           if (!(value instanceof LPCObject)) {
@@ -535,7 +400,7 @@ public class VM implements PropsObserver {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
             
-          key = readChunkConstantAsString(frame);
+          key = (String)instr.constants()[0];
           lpcObject = (LPCObject)value;
 
           //Look for a matching field.
@@ -560,7 +425,7 @@ public class VM implements PropsObserver {
           break;
           
         case OP_FIELD: //Define a new field in an LPCObject
-          identifier = readChunkConstantAsString(frame); //field name
+          identifier = (String)instr.constants()[0]; //field name
           value = vStack.peek();
           lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
 
@@ -571,7 +436,7 @@ public class VM implements PropsObserver {
           break;
           
         case OP_METHOD: //Define a new method in an LPCObject
-          identifier = readChunkConstantAsString(frame); //method name
+          identifier = (String)instr.constants()[0]; //method name
           closure = (Closure)vStack.peek();
           lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
 
@@ -580,6 +445,108 @@ public class VM implements PropsObserver {
           vStack.pop(); //mMethod
 
           break;
+          
+          case OP_EQUAL:
+            equate();
+
+            break;
+          
+          case OP_GREATER:
+            if (!twoNumericOperands())
+              return errorTwoNumbers();
+
+            binaryOp(Operation.OPERATION_GT);
+
+            break;
+          
+          case OP_LESS:
+            if (!twoNumericOperands())
+              return errorTwoNumbers();
+
+            binaryOp(Operation.OPERATION_LT);
+
+            break;
+          
+          case OP_ADD:
+            if (twoStringOperands())
+              concatenate();
+            else if (twoNumericOperands())
+              binaryOp(Operation.OPERATION_PLUS);
+            else
+              return errorTwoNumbersOrStrings();
+
+            break;
+          
+          case OP_SUBTRACT:
+            if (!twoNumericOperands())
+              return errorTwoNumbers();
+
+            binaryOp(Operation.OPERATION_SUBTRACT);
+
+            break;
+          
+          case OP_MULTIPLY:
+            if (!twoNumericOperands())
+              return errorTwoNumbers();
+
+            binaryOp(Operation.OPERATION_MULT);
+
+            break;
+          
+          case OP_DIVIDE:
+            if (!twoNumericOperands())
+              return errorTwoNumbers();
+
+            binaryOp(Operation.OPERATION_DIVIDE);
+
+            break;
+          
+          case OP_NOT:
+            value = vStack.pop();
+            
+            vStack.push(isFalsey(value));
+
+            break;
+          
+          case OP_NEGATE:
+            if (!oneNumericOperand())
+              return errorOneNumber();
+            
+            value = vStack.pop();
+
+            vStack.push(-(double)value);
+
+            break;
+          
+          case OP_JUMP:
+            offset = (int)instr.constants()[0];
+
+            frame.setIP(frame.ip() + offset);
+
+            break;
+          
+          case OP_JUMP_IF_FALSE:
+            offset = (int)instr.constants()[0];
+            value = vStack.peek();
+
+            if (isFalsey(value))
+              frame.setIP(frame.ip() + offset);
+
+            break;
+          
+          case OP_LOOP:
+            offset = (int)instr.constants()[0];
+
+            frame.setIP(frame.ip() - offset);
+
+            break;
+            
+        case OP_GET_SUPER:
+        
+          break;
+      default:
+        
+        break;
       } //switch
     } //for(;;)
   } //run()
@@ -602,7 +569,7 @@ public class VM implements PropsObserver {
     for (int i = fStack.size() - 1; i >=0; i--) {
       CallFrame frame = fStack.get(i);
       Compilation compilation = frame.closure().compilation();
-      int line = compilation.chunk().lines().get(frame.ip() - 1);
+      int line = compilation.instructions().get(frame.ip() - 1).line();
 
       System.err.print("[line " + line + "] in ");
 
@@ -642,10 +609,10 @@ public class VM implements PropsObserver {
 	if (callee instanceof Compilation) {
 		Closure closure = new Closure((Compilation) callee);
 		
-		return call(closure, 0);
+		return frame(closure, 0);
     //Closure
 	} else if (callee instanceof Closure)
-      return call((Closure)callee, argCount);
+      return frame((Closure)callee, argCount);
     //Native Function
     else if (callee instanceof NativeFn)
       return call((NativeFn)callee, argCount);
@@ -662,7 +629,7 @@ public class VM implements PropsObserver {
   //pushing the new CallFrame on the fStack.  Next time run() cycles
   //through, it will update its locally-cached frame variable to the
   //new CallFrame at the top of fStack, and execute its opCodes.
-  private boolean call(Closure closure, int argCount) {
+  private boolean frame(Closure closure, int argCount) {
     if (
       closure.compilation() instanceof C_Function &&
       !checkArity((C_Function)closure.compilation(), argCount)
@@ -714,7 +681,7 @@ public class VM implements PropsObserver {
 
     Closure method = lpcObject.methods().get(methodName);
 
-    return call(method, argCount);
+    return frame(method, argCount);
   }
 
   //invoke(String, int)
@@ -766,15 +733,15 @@ public class VM implements PropsObserver {
   //closeUpvalues(int)
   void closeUpvalues(int last) {
     while (openUpvalues != null && openUpvalues.location() >= last) {
-      Upvalue upvalue = openUpvalues;
+      Upvalue compilerUpvalue = openUpvalues;
 
-      upvalue.setClosedValue(vStack.get(upvalue.location()));
-      upvalue.setLocation(-1);
+      compilerUpvalue.setClosedValue(vStack.get(compilerUpvalue.location()));
+      compilerUpvalue.setLocation(-1);
 
       //after upvalue is closed, reset head of linked list
       //to next upvalue
-      openUpvalues = upvalue.next();
-      upvalue.setNext(null);
+      openUpvalues = compilerUpvalue.next();
+      compilerUpvalue.setNext(null);
     }
   }
 
@@ -804,29 +771,13 @@ public class VM implements PropsObserver {
       vStack.push(a.equals(b));
   }
 
-  //readChunkOpCodeByte(CallFrame)
-  private byte readChunkOpCodeByte(CallFrame frame) {
-    return frame.closure().compilation().chunk().opCodes().get(frame.getAndIncrementIP());
-  }
-
-  //readChunkOpCodeWord(CallFrame)
-  private short readChunkOpCodeWord(CallFrame frame) {
-    byte hi = readChunkOpCodeByte(frame);
-    byte lo = readChunkOpCodeByte(frame);
-
-    return (short)(((hi & 0xFF) << 8) | (lo & 0xFF));
-  }
-
-  //readChunkConstant(CallFrame)
-  private Object readChunkConstant(CallFrame frame) {
-    short index = readChunkOpCodeWord(frame);
-
-    return frame.closure().compilation().chunk().constants().get(index);
-  }
-
-  //readChunkConstantAsString(CallFrame)
-  private String readChunkConstantAsString(CallFrame frame) {
-    return (String)readChunkConstant(frame);
+  private Instruction readInstruction(CallFrame frame) {
+    //Do some caching to optimize all these lookups!
+    Compilation compilation = frame.closure().compilation();
+    List<Instruction> instrs = compilation.instructions();
+    Instruction instr = instrs.get(frame.getAndIncrementIP());
+    
+    return instr;
   }
 
   //oneNumericOperand()

@@ -12,9 +12,10 @@ public class AndParselet implements Parselet {
   public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
     int endJump = compiler.emitJump(OP_JUMP_IF_FALSE);
 
-    compiler.emitByte(OP_POP);
+    compiler.emitInstruction(OP_POP);
+    
     parser.parsePrecedence(PREC_AND);
-
+    
     compiler.patchJump(endJump);
   }
 }

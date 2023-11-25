@@ -1,12 +1,12 @@
 package jbLPC.compiler;
 
 import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_COMPILE_OBJ;
+import static jbLPC.compiler.OpCode.OP_COMPILE;
 import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_FIELD;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_GET_PROP;
+import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
 import static jbLPC.compiler.OpCode.OP_INHERIT;
 import static jbLPC.compiler.OpCode.OP_METHOD;
 import static jbLPC.compiler.OpCode.OP_MULTIPLY;
@@ -14,8 +14,8 @@ import static jbLPC.compiler.OpCode.OP_NIL;
 import static jbLPC.compiler.OpCode.OP_OBJECT;
 import static jbLPC.compiler.OpCode.OP_RETURN;
 import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_PROPERTY;
-import static jbLPC.compiler.OpCode.OP_SET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_SET_PROP;
+import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
 import static jbLPC.compiler.OpCode.OP_SUBTRACT;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_EOF;
@@ -37,6 +37,7 @@ import java.util.Map;
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
+import jbLPC.util.Props;
 
 public class LPCObjectCompiler extends LPCCompiler {
   public static Map<Path, C_LPCObject> compiledObjects = new HashMap<>();
@@ -56,8 +57,8 @@ public class LPCObjectCompiler extends LPCCompiler {
 
     int index = makeConstant(prefix);
 
-    emitByte(OP_OBJECT);
-    emitWord(index);
+    emitOpCode(OP_OBJECT);
+    emitArgCode(index);
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -74,7 +75,7 @@ public class LPCObjectCompiler extends LPCCompiler {
       return null;
 
     //end compilation
-    emitByte(OP_RETURN);
+    emitOpCode(OP_RETURN);
 
     if (debugPrintComp)
       Debugger.instance().disassembleScope(currScope);
@@ -92,12 +93,12 @@ public class LPCObjectCompiler extends LPCCompiler {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      emitByte(OP_NIL);
+      emitOpCode(OP_NIL);
 
     defineVariable(index);
 
-    emitByte(OP_FIELD);
-    emitWord(index);
+    emitOpCode(OP_FIELD);
+    emitArgCode(index);
 
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
@@ -128,16 +129,24 @@ public class LPCObjectCompiler extends LPCCompiler {
 
 //    beginScope();
 
-//    addLocal(syntheticToken("super"));
+//    if (currScope.locals().size() >= Props.instance().getInt("MAX_SIGNED_BYTE")) {
+//      parser.error("Too many local variables in function.");
+//
+//      return;
+//    }
+
+    //Record existence of local variable.
+    //Token token = syntheticToken("super"));
+//    currScope.locals().push(new Local(token, -1));
 
 //    defineVariable(0x00);
 
 //    namedVariable(classToken, false);
       
-    emitByte(OP_COMPILE_OBJ);
-    emitWord(index);
+    emitOpCode(OP_COMPILE);
+    emitArgCode(index);
 
-    emitByte(OP_INHERIT);
+    emitOpCode(OP_INHERIT);
 
 //    currentClass.setHasSuperclass(true);
   }
@@ -151,17 +160,17 @@ public class LPCObjectCompiler extends LPCCompiler {
   private void method(int index) {
     funDeclaration(index);
 
-    emitByte(OP_METHOD);
-    emitWord(index);
+    emitOpCode(OP_METHOD);
+    emitArgCode(index);
   }
 
   //namedVariable(Token, boolean)
-  //generates code to load a variable, whose lexeme equals the
+  //generates code to load a variable, whose name equals the
   //given Token's lexeme, onto the vStack.
   @Override
   public void namedVariable(Token token, boolean canAssign) {
-    byte getOp;
-    byte setOp;
+    OpCode getOp;
+    OpCode setOp;
 
     int arg = resolveLocal(currScope, token); //index of local var, or -1
 
@@ -169,23 +178,23 @@ public class LPCObjectCompiler extends LPCCompiler {
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
     } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
-      getOp = OP_GET_UPVALUE;
-      setOp = OP_SET_UPVALUE;
+      getOp = OP_GET_UPVAL;
+      setOp = OP_SET_UPVAL;
     } else { //field
-      emitByte(OP_GET_LOCAL);
-      emitWord(0); //correct way to do this?
+      emitOpCode(OP_GET_LOCAL);
+      emitArgCode(0); //correct way to do this?
 
       arg = identifierConstant(token);
 
-      getOp = OP_GET_PROPERTY;
-      setOp = OP_SET_PROPERTY;
+      getOp = OP_GET_PROP;
+      setOp = OP_SET_PROP;
     }
 
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      emitByte(setOp);
-      emitWord(arg);
+      emitOpCode(setOp);
+      emitArgCode(arg);
     } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
       compoundAssignment(getOp, setOp, OP_SUBTRACT, arg);
     else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
@@ -195,8 +204,8 @@ public class LPCObjectCompiler extends LPCCompiler {
     else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
       compoundAssignment(getOp, setOp, OP_MULTIPLY, arg);
     else { //retrieval
-      emitByte(getOp);
-      emitWord(arg);
+      emitOpCode(getOp);
+      emitArgCode(arg);
     }
   }
 

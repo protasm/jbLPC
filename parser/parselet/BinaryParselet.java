@@ -24,46 +24,46 @@ public class BinaryParselet implements Parselet {
 
     switch (operatorType) {
       case TOKEN_BANG_EQUAL:
-        compiler.emitByte(OP_EQUAL);
-        compiler.emitByte(OP_NOT);
+        compiler.emitInstruction(OP_EQUAL);
+        compiler.emitInstruction(OP_NOT);
 
         break;
       case TOKEN_EQUAL_EQUAL:
-        compiler.emitByte(OP_EQUAL);
+        compiler.emitInstruction(OP_EQUAL);
 
         break;
       case TOKEN_GREATER:
-        compiler.emitByte(OP_GREATER);
+        compiler.emitInstruction(OP_GREATER);
 
         break;
       case TOKEN_GREATER_EQUAL:
-        compiler.emitByte(OP_LESS);
-        compiler.emitByte(OP_NOT);
+        compiler.emitInstruction(OP_LESS);
+        compiler.emitInstruction(OP_NOT);
 
         break;
       case TOKEN_LESS:
-        compiler.emitByte(OP_LESS);
+        compiler.emitInstruction(OP_LESS);
 
         break;
       case TOKEN_LESS_EQUAL:
-        compiler.emitByte(OP_GREATER);
-        compiler.emitByte(OP_NOT);
+        compiler.emitInstruction(OP_GREATER);
+        compiler.emitInstruction(OP_NOT);
 
         break;
       case TOKEN_PLUS:
-        compiler.emitByte(OP_ADD);
+        compiler.emitInstruction(OP_ADD);
 
         break;
       case TOKEN_MINUS:
-        compiler.emitByte(OP_SUBTRACT);
+        compiler.emitInstruction(OP_SUBTRACT);
 
         break;
       case TOKEN_STAR:
-        compiler.emitByte(OP_MULTIPLY);
+        compiler.emitInstruction(OP_MULTIPLY);
 
         break;
       case TOKEN_SLASH:
-        compiler.emitByte(OP_DIVIDE);
+        compiler.emitInstruction(OP_DIVIDE);
 
         break;
       case TOKEN_PLUS_EQUAL:

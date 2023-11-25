@@ -4,6 +4,7 @@ import static jbLPC.compiler.OpCode.OP_INVOKE;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 
+import jbLPC.compiler.Instruction;
 import jbLPC.compiler.LPCCompiler;
 import jbLPC.parser.Parser;
 
@@ -17,10 +18,13 @@ public class InvokeParselet implements Parselet {
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
 
-    byte argCount = compiler.argumentList();
+    int argCount = compiler.argumentList();
 
-    compiler.emitByte(OP_INVOKE);
-    compiler.emitWord(index); //method name
-    compiler.emitByte(argCount);
+    Instruction instr = new Instruction(
+      OP_INVOKE,
+      new Object[] { index, argCount }
+    );
+
+    compiler.emitInstruction(instr);
   }
 }

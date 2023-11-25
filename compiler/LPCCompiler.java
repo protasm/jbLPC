@@ -1,14 +1,14 @@
 package jbLPC.compiler;
 
 import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_CLOSE_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.OpCode.OP_CLOSURE;
-import static jbLPC.compiler.OpCode.OP_CONSTANT;
-import static jbLPC.compiler.OpCode.OP_DEFINE_GLOBAL;
+import static jbLPC.compiler.OpCode.OP_CONST;
+import static jbLPC.compiler.OpCode.OP_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
 import static jbLPC.compiler.OpCode.OP_JUMP;
 import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.OpCode.OP_LOOP;
@@ -18,7 +18,7 @@ import static jbLPC.compiler.OpCode.OP_POP;
 import static jbLPC.compiler.OpCode.OP_RETURN;
 import static jbLPC.compiler.OpCode.OP_SET_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_UPVALUE;
+import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
 import static jbLPC.compiler.OpCode.OP_SUBTRACT;
 import static jbLPC.parser.Parser.Precedence.PREC_ASSIGNMENT;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
@@ -41,9 +41,15 @@ import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
+import java.util.List;
+import java.util.Stack;
+import java.util.stream.Collectors;
+
 import jbLPC.debug.Debugger;
+import jbLPC.nativefn.NativeFn;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
+import jbLPC.util.Pair;
 import jbLPC.util.Props;
 import jbLPC.util.PropsObserver;
 
@@ -67,27 +73,20 @@ public class LPCCompiler implements PropsObserver {
 
   //addLocal(Token)
   private void addLocal(Token token) {
-    if (currScope.locals().size() >= Props.instance().getInt("MAX_SIGNED_BYTE")) {
-      parser.error("Too many local variables in function.");
-
-      return;
-    }
-
-    currScope.locals().push(new Local(token, -1));
   }
 
   //addUpvalue(Scope, byte, boolean)
-  private int addUpvalue(Scope scope, byte index, boolean isLocal) {
+  private int addUpvalue(Scope scope, Integer index, boolean isLocal) {
     int maxClosureVariables = Props.instance().getInt("MAX_SIGNED_BYTE");
 
-    int upvalueCount = scope.upvalues().size();
+    int upvalueCount = scope.compilerUpvalues().size();
 
     for (int i = 0; i < upvalueCount; i++) {
-      Upvalue upvalue = scope.getUpvalue(i);
+      CompilerUpvalue compilerUpvalue = scope.getUpvalue(i);
 
       //isLocal controls whether closure captures a local variable or
       //an upvalue from the surrounding function
-      if (upvalue.index() == index && upvalue.isLocal() == isLocal)
+      if (compilerUpvalue.index() == index && compilerUpvalue.isLocal() == isLocal)
         return i;
     }
 
@@ -100,12 +99,12 @@ public class LPCCompiler implements PropsObserver {
     //Return index of the created upvalue in the currScope's
     //upvalue list.  That index becomes the operand to the
     //OP_GET_UPVALUE and OP_SET_UPVALUE instructions.
-    return scope.addUpvalue(new Upvalue(index, isLocal));
+    return scope.addUpvalue(new CompilerUpvalue(index, isLocal));
   }
 
   //argumentList()
-  public byte argumentList() {
-    byte argCount = 0;
+  public Integer argumentList() {
+    Integer argCount = 0;
     int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
 
     if (!parser.check(TOKEN_RIGHT_PAREN))
@@ -156,8 +155,8 @@ public class LPCCompiler implements PropsObserver {
     if (parser.hadError())
       return null;
       
-    emitByte(OP_NIL); //return value; always null for a Script
-    emitByte(OP_RETURN);
+    emitInstruction(OP_NIL); //return value; always null for a Script
+    emitInstruction(OP_RETURN);
 
     if (debugPrintComp)
       Debugger.instance().disassembleScope(currScope);
@@ -165,22 +164,20 @@ public class LPCCompiler implements PropsObserver {
     return currScope.compilation();
   }
 
-  //compoundAssignment(OpCode, int)
-  protected void compoundAssignment(byte getOp, byte setOp, byte assignOp, int index) {
-    emitByte(getOp);
-    emitWord(index);
+  //compoundAssignment(OpCode, OpCode, OpCode)
+  protected void compoundAssignment(OpCode getOp, OpCode setOp, OpCode assignOp) {
+    emitInstruction(getOp);
 
     expression();
 
-    emitByte(assignOp);
+    emitInstruction(assignOp);
 
-    emitByte(setOp);
-    emitWord(index);
+    emitInstruction(setOp);
   }
 
-  //currChunk()
-  protected Chunk currChunk() {
-    return currScope.compilation().chunk();
+  //instructions()
+  protected List<Instruction> currInstructions() {
+    return currScope.compilation().instructions();
   }
 
   //currClass()
@@ -198,38 +195,49 @@ public class LPCCompiler implements PropsObserver {
     if (parser.panicMode())
       parser.synchronize();
   }
+  
+  //parseVariable(String)
+  protected void parseVariable(String errorMessage) {
+    parser.consume(TOKEN_IDENTIFIER, errorMessage);
 
-  //declareVariable()
-  private void declareVariable() {
-    if (currScope.depth() == 0)
+    Token token = parser.previous();
+    
+    if (currScope.depth() == 0) {
+      identifierConstant(token); //Global
+      
       return;
+    }
 
     //In the locals, a variable is "declared" when it is
     //added to the scope.
-    Token token = parser.previous();
 
-    //Start at the end of the locals array and work backward,
-    //looking for an existing variable with the same name.
-    for (int i = currScope.locals().size() - 1; i >= 0; i--) {
-      Local local = currScope.locals().get(i);
+    //Check for an existing local variable with the same name.
+    int currScopeDepth = currScope.depth();
+    List<Local> currScopeLocals = currScope.locals()
+      .stream()
+      .filter(item -> (item.depth() == -1 || item.depth() == currScopeDepth))
+      .collect(Collectors.toList());
 
-      if (local.depth() != -1 && local.depth() < currScope.depth())
-        break;
-
+    for (Local local : currScopeLocals)
       if (identifiersEqual(token, local.token()))
         parser.error("Already a variable with this name in this scope.");
+
+    if (currScope.locals().size() >= Props.instance().getInt("MAX_SIGNED_BYTE")) {
+      parser.error("Too many local variables in function.");
+
+      return;
     }
 
     //Record existence of local variable.
-    addLocal(parser.previous());
+    currScope.locals().push(new Local(token, -1));
   }
 
-  //defineVariable(int)
-  protected void defineVariable(int index) {
+  //defineVariable()
+  protected void defineVariable() {
     if (currScope.depth() > 0) {
       //In the locals, a variable is "defined" when it
       //becomes available for use.
-      markInitialized();
+      currScope.markTopLocalInitialized();
 
       //No code needed to create a local variable at
       //runtime; it's on top of the stack.
@@ -238,76 +246,58 @@ public class LPCCompiler implements PropsObserver {
     }
 
     if (currScope.compilation() instanceof C_Script) {
-      emitByte(OP_DEFINE_GLOBAL);
-      emitWord(index);
+      Instruction instr = new Instruction(OP_GLOBAL);
+      
+      emitInstruction(instr);
     }
   }
 
-  //emitByte(byte)
-  public void emitByte(byte b) {
-    if (parser.previous() == null) //may occur for "synthetic" operations
-      currChunk().writeByte(b);
-    else
-      currChunk().writeByte(b, parser.previous().line());
+  //emitInstruction(OpCode)
+  public void emitInstruction(OpCode opCode) {
+    emitInstruction(new Instruction(opCode));
   }
 
-  //emitConstant(Object)
-  public void emitConstant(Object value) {
-    int index = makeConstant(value);
-
-    emitByte(OP_CONSTANT);
-    emitWord(index);
+  //emitInstruction(Instruction)
+  public void emitInstruction(Instruction instr) {
+    if (parser.previous() != null) //may be null for "synthetic" operations
+      instr.setLine(parser.previous().line());
+    
+    currInstructions().add(instr);
   }
 
-  //emitJump(byte)
-  public int emitJump(byte instruction) {
-    emitByte(instruction);
+  //emitJump(OpCode)
+  public int emitJump(OpCode opCode) {
+    Instruction instr = new Instruction(
+      opCode,
+      255 //placeholder, later backpatched)
+    );
+    
+    emitInstruction(instr);
 
-    //placeholders, later backpatched.
-    emitByte((byte)0xFF);
-    emitByte((byte)0xFF);
-
-    return currChunk().opCodes().size() - 2;
+    return currInstructions().size() - 1;
   }
 
   //emitLoop(int)
   private void emitLoop(int loopStart) {
-    int maxLoop = Props.instance().getInt("MAX_LOOP");
+    int offset = currInstructions().size() - loopStart + 2;
 
-    emitByte(OP_LOOP);
+    if (offset > Props.instance().getInt("MAX_LOOP"))
+      parser.error("Loop body too large.");
+    
+    Instruction instr = new Instruction(OP_LOOP, offset);
 
-    int offset = currChunk().opCodes().size() - loopStart + 2;
-
-    if (offset > maxLoop) parser.error("Loop body too large.");
-
-    emitWord(offset);
-  }
-
-  //emitWord(int)
-  public void emitWord(int i) {
-    emitWord((short)i);
-  }
-
-  //emitWord(short)
-  public void emitWord(short s) {
-    byte b1 = highByte(s);
-    byte b2 = lowByte(s);
-
-    if (parser.previous() == null) //may occur for "synthetic" operations
-      currChunk().writeWord(b1, b2);
-    else
-      currChunk().writeWord(b1, b2, parser.previous().line());
+    emitInstruction(instr);
   }
 
   //endFunction()
   private C_Function endFunction() {
-    emitByte(OP_NIL); //return value?
-    emitByte(OP_RETURN);
+    emitInstruction(OP_NIL); //return value?
+    emitInstruction(OP_RETURN);
 
     //Extract assembled function from temporary structure.
     C_Function function = (C_Function)currScope.compilation();
 
-    function.setUpvalueCount(currScope.upvalues().size());
+    function.setUpvalueCount(currScope.compilerUpvalues().size());
 
     if (!parser.hadError() && debugPrintComp)
       Debugger.instance().disassembleScope(currScope);
@@ -327,9 +317,9 @@ public class LPCCompiler implements PropsObserver {
       currScope.locals().peek().depth() > currScope.depth()
     ) {
       if (currScope.locals().get(currScope.locals().size() - 1).isCaptured())
-        emitByte(OP_CLOSE_UPVALUE);
+        emitInstruction(OP_CLOSE_UPVAL);
       else
-        emitByte(OP_POP);
+        emitInstruction(OP_POP);
 
       currScope.locals().pop();
     }
@@ -346,7 +336,7 @@ public class LPCCompiler implements PropsObserver {
 
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
 
-    emitByte(OP_POP);
+    emitInstruction(OP_POP);
   }
 
   //forStatement()
@@ -359,13 +349,13 @@ public class LPCCompiler implements PropsObserver {
     if (parser.match(TOKEN_SEMICOLON)) {
       // No initializer.
     } else if (parser.match(TOKEN_PRIMITIVE)) {
-      int index = parseVariable("Expect variable name.");
+      parseVariable("Expect variable name.");
 
-      varDeclaration(index);
+      varDeclaration();
     } else
       expressionStatement();
 
-    int loopStart = currChunk().opCodes().size();
+    int loopStart = currInstructions().size();
 
      //Condition clause.
     int exitJump = -1;
@@ -378,17 +368,17 @@ public class LPCCompiler implements PropsObserver {
       // Jump out of the loop if the condition is false.
       exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-      emitByte(OP_POP); // Condition.
+      emitInstruction(OP_POP); // Condition.
     }
 
     //Increment clause.
     if (!parser.match(TOKEN_RIGHT_PAREN)) {
       int bodyJump = emitJump(OP_JUMP);
-      int incrementStart = currChunk().opCodes().size();
+      int incrementStart = currInstructions().size();
 
       expression();
 
-      emitByte(OP_POP);
+      emitInstruction(OP_POP);
 
       parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
 
@@ -406,7 +396,7 @@ public class LPCCompiler implements PropsObserver {
     if (exitJump != -1) {
       patchJump(exitJump);
 
-      emitByte(OP_POP); // Condition.
+      emitInstruction(OP_POP); // Condition.
     }
 
     endScope();
@@ -414,7 +404,6 @@ public class LPCCompiler implements PropsObserver {
 
   //function()
   private void function() {
-    int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
     C_Function function = new C_Function(parser.previous().lexeme());
     Scope scope = new Scope(
       currScope, //enclosing Scope
@@ -430,14 +419,16 @@ public class LPCCompiler implements PropsObserver {
       do {
         function.setArity(function.arity() + 1);
 
+        int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
+
         if (function.arity() > maxSignedByte)
           parser.errorAtCurrent("Can't have more than " + maxSignedByte + " parameters.");
 
         parser.consume(TOKEN_PRIMITIVE, "Expect type for parameter.");
 
-        int index = parseVariable("Expect parameter name.");
+        parseVariable("Expect parameter name.");
 
-        defineVariable(index);
+        defineVariable();
       } while (parser.match(TOKEN_COMMA));
 
     parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
@@ -447,48 +438,47 @@ public class LPCCompiler implements PropsObserver {
 
     function = endFunction(); //sets currScope to enclosing
 
-    //We're emitting into the Chunk in the enclosing scope now.
-    //Store the compiled function in the enclosing scope Chunk's
-    //constant table and emit the OpCode for the VM to build a Closure
-    //around it at runtime.
-    emitByte(OP_CLOSURE);
-    emitWord(makeConstant(function));
-
-    for (Upvalue upvalue : scope.upvalues()) {
-      emitByte((byte)(upvalue.isLocal() ? 1 : 0));
-      emitByte((upvalue.index()));
-    }
+    Instruction instr = new Instruction(
+      OP_CLOSURE,
+      new Object[] { function, scope.compilerUpvalues() }
+    );
+    
+    emitInstruction(instr);
 
     //No endScope() needed because Scope is ended completely
     //at the end of the function body.
   }
 
-  //funDeclaration(int)
-  protected void funDeclaration(int index) {
+  //funDeclaration()
+  protected void funDeclaration() {
     //Function declaration's variable is marked "initialized"
     //before compiling the body so that the name can be
     //referenced inside the body without generating an error.
-    markInitialized();
+    currScope.markTopLocalInitialized();
 
     function();
 
-    defineVariable(index);
-  }
-
-  //highByte(short)
-  private byte highByte(short s) {
-    return (byte)((s >> 8) & 0xFF);
+    defineVariable();
   }
 
   //identifierConstant(Token)
-  public int identifierConstant(Token token) {
-    //return index of newly added constant
-    return makeConstant(token.lexeme());
+  public void identifierConstant(Token token) {
+    Instruction instr = new Instruction(
+      OP_CONST,
+      token.lexeme()
+    );
+    
+    emitInstruction(instr);
   }
 
   //stringConstant(Token)
-  public int stringConstant(Token token) {
-    return makeConstant(token.literal());
+  public void stringConstant(Token token) {
+    Instruction instr = new Instruction(
+      OP_CONST,
+      token.literal()
+    );
+      
+    emitInstruction(instr);
   }
 
   //identifiersEqual(Token, Token)
@@ -506,7 +496,7 @@ public class LPCCompiler implements PropsObserver {
 
     int thenJump = emitJump(OP_JUMP_IF_FALSE);
 
-    emitByte(OP_POP);
+    emitInstruction(OP_POP);
 
     statement();
 
@@ -514,58 +504,28 @@ public class LPCCompiler implements PropsObserver {
 
     patchJump(thenJump);
 
-    emitByte(OP_POP);
+    emitInstruction(OP_POP);
 
     if (parser.match(TOKEN_ELSE)) statement();
 
     patchJump(elseJump);
   }
 
-  //lowByte(short)
-  private byte lowByte(short s) {
-    return (byte)(s & 0xFF);
-  }
-
-  //makeConstant(Object)
-  protected int makeConstant(Object value) {
-    currChunk().constants().add(value);
-
-    int index = currChunk().constants().size() - 1;
-
-    if (index > Props.instance().getInt("MAX_SIGNED_SHORT")) {
-      parser.error("Too many constants in one chunk.");
-
-      return 0;
-    }
-
-    //Return the index of the constant added.
-    return index;
-  }
-
-  //markInitialized()
-  private void markInitialized() {
-    if (currScope.depth() == 0) return;
-
-    currScope.markTopLocalInitialized();
-  }
-
   //namedVariable(Token, boolean)
   //generates code to load a variable with the given name onto the vStack.
   public void namedVariable(Token token, boolean canAssign) {
-    byte getOp;
-    byte setOp;
+    OpCode getOp;
+    OpCode setOp;
 
-    int arg = resolveLocal(currScope, token);
-
-    if (arg != -1) { //local variable
+    if (resolveLocal(currScope, token)) { //local variable
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
-    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
-      getOp = OP_GET_UPVALUE;
-      setOp = OP_SET_UPVALUE;
+    } else if (resolveUpvalue(currScope, token)) { //upvalue
+      getOp = OP_GET_UPVAL;
+      setOp = OP_SET_UPVAL;
     } else { //global variable
-      //add token to constants and store index in arg
-      arg = identifierConstant(token);
+      //add token to constants
+      identifierConstant(token);
 
       getOp = OP_GET_GLOBAL;
       setOp = OP_SET_GLOBAL;
@@ -574,8 +534,8 @@ public class LPCCompiler implements PropsObserver {
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      emitByte(setOp);
-      emitWord(arg);
+      emitInstruction(setOp);
+      emitArgCode(arg);
     } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
       compoundAssignment(getOp, setOp, OP_SUBTRACT, arg);
     else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
@@ -585,8 +545,8 @@ public class LPCCompiler implements PropsObserver {
     else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
       compoundAssignment(getOp, setOp, OP_MULTIPLY, arg);
     else { //retrieval
-      emitByte(getOp);
-      emitWord(arg);
+      emitInstruction(getOp);
+      emitArgCode(arg);
     }
   }
 
@@ -595,74 +555,57 @@ public class LPCCompiler implements PropsObserver {
     return parser;
   }
 
-  //parseVariable(String)
-  protected int parseVariable(String errorMessage) {
-    parser.consume(TOKEN_IDENTIFIER, errorMessage);
-
-    declareVariable();
-
-    //Exit the function if we're in a local scope,
-    //returning a dummy table index.
-    if (currScope.depth() > 0) return 0;
-
-    return identifierConstant(parser.previous());
-  }
-
   //patchJump(int)
   public void patchJump(int offset) {
-    int maxJump = Props.instance().getInt("MAX_JUMP");
-    // -2 to adjust for the bytecode for the jump offset itself.
-    int jump = currChunk().opCodes().size() - offset - 2;
+    // -1 to adjust for the jump offset itself.
+    int jump = currInstructions().size() - offset - 1;
 
-    if (jump > maxJump)
+    if (jump > Props.instance().getInt("MAX_JUMP"))
       parser.error("Too much code to jump over.");
+    
+    Instruction instr = new Instruction(OP_JUMP, jump);
 
-    byte hi = highByte((short)jump);
-    byte lo = lowByte((short)jump);
-
-    currChunk().opCodes().set(offset, hi);
-    currChunk().opCodes().set(offset + 1, lo);
+    currInstructions().set(offset, instr);
   }
 
   //resolveLocal(Scope, Token)
-  protected int resolveLocal(Scope scope, Token token) {
-    for (int i = scope.locals().size() - 1; i >= 0; i--) {
-      Local local = scope.locals().get(i);
-
+  protected boolean resolveLocal(Scope scope, Token token) {
+    for (Local local : currScope.locals()) {
       if (identifiersEqual(token, local.token())) { //found
-        //prevent 'var a = a;'
-        if (local.depth() == -1) //"sentinel" depth
+        if (local.depth() == -1) //prevent 'var a = a;'
           parser.error("Can't read local variable in its own initializer.");
 
-        return i;
+        return true;
       }
     }
 
     //No variable with the given name, therefore not a local.
-    return -1;
+    return false;
   }
 
   //resolveUpvalue(Scope, Token)
-  protected int resolveUpvalue(Scope scope, Token token) {
+  protected boolean resolveUpvalue(Scope scope, Token token) {
     Scope enclosing = scope.enclosing();
 
-    if (enclosing == null) return -1;
+    if (enclosing == null) return false;
 
-    int local = resolveLocal(enclosing, token);
+    boolean local = resolveLocal(enclosing, token);
 
-    if (local != -1) {
+    if (!local) {
       enclosing.locals().get(local).setIsCaptured(true);
 
       //Return index of newly-added Upvalue.
-      return addUpvalue(scope, (byte)local, true);
+      addUpvalue(scope, index, true);
+      
+      return true;
     }
 
     int upvalue = resolveUpvalue(enclosing, token);
 
     if (upvalue != -1)
-      return addUpvalue(scope, (byte)upvalue, false);
+      return addUpvalue(scope, upvalue, false);
 
-    return -1;
+    return false;
   }
 
   //returnStatement()
@@ -671,14 +614,14 @@ public class LPCCompiler implements PropsObserver {
       parser.error("Can't return from top-level code.");
 
     if (parser.match(TOKEN_SEMICOLON)) //no return value provided
-      emitByte(OP_NIL);
+      emitInstruction(OP_NIL);
     else { //handle return value
       expression();
 
       parser.consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
     }
 
-    emitByte(OP_RETURN);
+    emitInstruction(OP_RETURN);
   }
 
   //statement()
@@ -708,29 +651,29 @@ public class LPCCompiler implements PropsObserver {
 
   //typedDeclaration()
   protected void typedDeclaration() {
-    int index = parseVariable("Expect function or variable name.");
+    parseVariable("Expect function or variable name.");
 
     if (parser.check(TOKEN_LEFT_PAREN))
-      funDeclaration(index);
+      funDeclaration();
     else
-      varDeclaration(index);
+      varDeclaration();
   }
 
-  //varDeclaration(int)
-  protected void varDeclaration(int index) {
+  //varDeclaration()
+  protected void varDeclaration() {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      emitByte(OP_NIL);
+      emitInstruction(OP_NIL);
 
-    defineVariable(index);
+    defineVariable();
 
     //handle variable declarations of the form:
-    //var x = 99, y, z = "hello";
+    //int x = 99, y, z = "hello";
     if (parser.match(TOKEN_COMMA)) {
-      int nextVarIndex = parseVariable("Expect variable name.");
+      parseVariable("Expect variable name.");
 
-      varDeclaration(nextVarIndex);
+      varDeclaration();
 
       return;
     }
@@ -740,7 +683,7 @@ public class LPCCompiler implements PropsObserver {
 
   //whileStatement()
   private void whileStatement() {
-    int loopStart = currChunk().opCodes().size();
+    int loopStart = currInstructions().size();
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
 
@@ -750,7 +693,7 @@ public class LPCCompiler implements PropsObserver {
 
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-    emitByte(OP_POP);
+    emitInstruction(OP_POP);
 
     statement();
 
@@ -758,7 +701,7 @@ public class LPCCompiler implements PropsObserver {
 
     patchJump(exitJump);
 
-    emitByte(OP_POP);
+    emitInstruction(OP_POP);
   }
 
   //updateCachedProperties()
