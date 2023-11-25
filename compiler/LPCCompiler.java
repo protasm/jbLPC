@@ -4,11 +4,11 @@ import static jbLPC.compiler.OpCode.OP_ADD;
 import static jbLPC.compiler.OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.OpCode.OP_CLOSURE;
 import static jbLPC.compiler.OpCode.OP_CONST;
-import static jbLPC.compiler.OpCode.OP_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_DIVIDE;
 import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
+import static jbLPC.compiler.OpCode.OP_GLOBAL;
 import static jbLPC.compiler.OpCode.OP_JUMP;
 import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.OpCode.OP_LOOP;
@@ -42,43 +42,31 @@ import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import java.util.List;
-import java.util.Stack;
 import java.util.stream.Collectors;
 
 import jbLPC.debug.Debugger;
-import jbLPC.nativefn.NativeFn;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
-import jbLPC.util.Pair;
-import jbLPC.util.Props;
-import jbLPC.util.PropsObserver;
+import jbLPC.util.Prefs;
 
-public class LPCCompiler implements PropsObserver {
+public class LPCCompiler {
   protected Parser parser;
   protected Scope currScope;
   //the current, innermost class being compiled
   protected CompilerClass currClass;
 
-  //Cached properties
-  protected boolean debugMaster;
-  protected boolean debugPrintProgress;
-  protected boolean debugPrintComp;
 
   //LPCCompiler()
   public LPCCompiler() {
-    Props.instance().registerObserver(this);
-    
-    if (debugPrintProgress) Debugger.instance().printProgress("LPCCompiler initialized");
+    Debugger.instance().printProgress("LPCCompiler initialized");
   }
 
   //addLocal(Token)
-  private void addLocal(Token token) {
-  }
+//  private void addLocal(Token token) {
+//  }
 
   //addUpvalue(Scope, byte, boolean)
   private int addUpvalue(Scope scope, Integer index, boolean isLocal) {
-    int maxClosureVariables = Props.instance().getInt("MAX_SIGNED_BYTE");
-
     int upvalueCount = scope.compilerUpvalues().size();
 
     for (int i = 0; i < upvalueCount; i++) {
@@ -90,12 +78,6 @@ public class LPCCompiler implements PropsObserver {
         return i;
     }
 
-    if (upvalueCount == maxClosureVariables) {
-      parser.error("Too many closure variables in function.");
-
-      return 0;
-    }
-
     //Return index of the created upvalue in the currScope's
     //upvalue list.  That index becomes the operand to the
     //OP_GET_UPVALUE and OP_SET_UPVALUE instructions.
@@ -105,14 +87,9 @@ public class LPCCompiler implements PropsObserver {
   //argumentList()
   public Integer argumentList() {
     Integer argCount = 0;
-    int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
-
     if (!parser.check(TOKEN_RIGHT_PAREN))
       do {
         expression();
-
-        if (argCount == maxSignedByte)
-          parser.error("Can't have more than " + maxSignedByte + " arguments.");
 
         argCount++;
       } while (parser.match(TOKEN_COMMA));
@@ -143,7 +120,7 @@ public class LPCCompiler implements PropsObserver {
       new C_Script() //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling '" + name + "'");
+    Debugger.instance().printProgress("Compiling '" + name + "'");
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -158,8 +135,7 @@ public class LPCCompiler implements PropsObserver {
     emitInstruction(OP_NIL); //return value; always null for a Script
     emitInstruction(OP_RETURN);
 
-    if (debugPrintComp)
-      Debugger.instance().disassembleScope(currScope);
+    Debugger.instance().traceCompilation(currScope);
     
     return currScope.compilation();
   }
@@ -222,12 +198,6 @@ public class LPCCompiler implements PropsObserver {
       if (identifiersEqual(token, local.token()))
         parser.error("Already a variable with this name in this scope.");
 
-    if (currScope.locals().size() >= Props.instance().getInt("MAX_SIGNED_BYTE")) {
-      parser.error("Too many local variables in function.");
-
-      return;
-    }
-
     //Record existence of local variable.
     currScope.locals().push(new Local(token, -1));
   }
@@ -281,9 +251,6 @@ public class LPCCompiler implements PropsObserver {
   private void emitLoop(int loopStart) {
     int offset = currInstructions().size() - loopStart + 2;
 
-    if (offset > Props.instance().getInt("MAX_LOOP"))
-      parser.error("Loop body too large.");
-    
     Instruction instr = new Instruction(OP_LOOP, offset);
 
     emitInstruction(instr);
@@ -299,8 +266,8 @@ public class LPCCompiler implements PropsObserver {
 
     function.setUpvalueCount(currScope.compilerUpvalues().size());
 
-    if (!parser.hadError() && debugPrintComp)
-      Debugger.instance().disassembleScope(currScope);
+    if (!parser.hadError())
+      Debugger.instance().traceCompilation(currScope);
 
     //Step up to higher scope.
     currScope = currScope.enclosing();
@@ -418,11 +385,6 @@ public class LPCCompiler implements PropsObserver {
     if (!parser.check(TOKEN_RIGHT_PAREN))
       do {
         function.setArity(function.arity() + 1);
-
-        int maxSignedByte = Props.instance().getInt("MAX_SIGNED_BYTE");
-
-        if (function.arity() > maxSignedByte)
-          parser.errorAtCurrent("Can't have more than " + maxSignedByte + " parameters.");
 
         parser.consume(TOKEN_PRIMITIVE, "Expect type for parameter.");
 
@@ -560,9 +522,6 @@ public class LPCCompiler implements PropsObserver {
     // -1 to adjust for the jump offset itself.
     int jump = currInstructions().size() - offset - 1;
 
-    if (jump > Props.instance().getInt("MAX_JUMP"))
-      parser.error("Too much code to jump over.");
-    
     Instruction instr = new Instruction(OP_JUMP, jump);
 
     currInstructions().set(offset, instr);
@@ -702,18 +661,5 @@ public class LPCCompiler implements PropsObserver {
     patchJump(exitJump);
 
     emitInstruction(OP_POP);
-  }
-
-  //updateCachedProperties()
-  protected void updateCachedProperties() {
-    debugMaster = Props.instance().getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
-    debugPrintComp = debugMaster && Props.instance().getBool("DEBUG_COMP");
-  }
-
-  //notifyPropertiesChanged()
-  @Override
-  public void notifyPropertiesChanged() {
-    updateCachedProperties();
   }
 }

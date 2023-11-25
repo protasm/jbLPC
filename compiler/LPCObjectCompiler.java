@@ -53,7 +53,7 @@ public class LPCObjectCompiler extends LPCCompiler {
       new C_LPCObject(prefix) //compilation
     );
 
-    if (debugPrintProgress) Debugger.instance().printProgress("Compiling LPCObject '" + prefix + "'");
+    Debugger.instance().printProgress("Compiling LPCObject '" + prefix + "'");
 
     int index = makeConstant(prefix);
 

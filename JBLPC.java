@@ -2,34 +2,27 @@ package jbLPC;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
-import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.TreeSet;
-import java.util.SortedSet;
 
-import jbLPC.util.Pair;
-import jbLPC.util.Props;
+import jbLPC.util.Prefs;
 import jbLPC.vm.VM;
 
 public class JBLPC {
   private VM vm;
   private int exitCode;
   private String exitMessage;
-  private Map<String, Pair<String>> replCommands;
+  private Map<String, String> debugCommands;
 
   //JBLPC()
   public JBLPC() {
-    String propsFile = System.getProperty("user.home") + "/eclipse-workspace/jbLPC/src/jbLPC/props";
-
-    Props.instance().open(propsFile);
-
     vm = new VM();
-    replCommands = buildREPLCommands();
+    debugCommands = buildDebugCommands();
   }
 
   //runFile(String)
@@ -105,7 +98,7 @@ public class JBLPC {
     boolean continueREPL = true; //continue by default
 
     if (command.equals("debug"))
-      printDebugProperties();
+      printDebugStatus();
     else if (command.equals("lib"))
       System.out.println(vm.getLibPath());
     else if (command.equals("quit") || command.equals("q")) {
@@ -113,11 +106,12 @@ public class JBLPC {
       exitMessage = "Goodbye.";
 
       continueREPL = false;
-    } else if (replCommands.containsKey(command)) {
-      Pair<String> pair = replCommands.get(command);
-      String newStatus = Props.instance().toggleBool(pair.left()) ? "ON" : "OFF";
+    } else if (debugCommands.containsKey(command)) {
+      boolean status = Prefs.instance().getBoolean(command);
 
-      System.out.println(command + ": " + newStatus);
+      Prefs.instance().putBoolean(command, !status); //flip
+
+      System.out.println(command + ": " + (!(status) ? "ON" : "OFF"));
     } else
       System.out.println("Unknown REPL command: '" + command + "'");
 
@@ -126,8 +120,6 @@ public class JBLPC {
 
   //shutdown(int, String)
   private void shutdown(int code, String message) {
-    Props.instance().close();
-
     if (code == 0) {
       if (message != null)
         System.out.println(message);
@@ -141,48 +133,45 @@ public class JBLPC {
     }
   }
 
-  //buildREPLCommands()
-  private Map<String, Pair<String>> buildREPLCommands() {
-    return new HashMap<>() {
+  //buildDebugCommands()
+  private Map<String, String> buildDebugCommands() {
+    return new LinkedHashMap<>() {
       private static final long serialVersionUID = 1L;
 	{
-      put("master",  new Pair<String>("DEBUG_MASTER",  "Master"));
-      put("stack",   new Pair<String>("DEBUG_STACK",   "Print VM Values stack [requires 'exec']"));
-      put("exec",    new Pair<String>("DEBUG_EXEC",    "Trace VM execution"));
-      put("prog",    new Pair<String>("DEBUG_PROG",    "Show interpret pipeline progress"));
-      put("consts",  new Pair<String>("DEBUG_CONSTS",  "Print constants for Chunk in current scope [requires 'comp']"));
-      put("globals", new Pair<String>("DEBUG_GLOBALS", "Print VM globals [requires 'exec']"));
-      put("locals",  new Pair<String>("DEBUG_LOCALS",  "Print Locals in current scope [requires 'comp']"));
-      put("upvals",  new Pair<String>("DEBUG_UPVALS",  "Print Upvalues for function in current scope [requires 'comp']"));
-      put("source",  new Pair<String>("DEBUG_SOURCE",  "Print source code being interpreted"));
-      put("code",    new Pair<String>("DEBUG_CODE",    "Print int value of code before OpCode"));
-      put("comp",    new Pair<String>("DEBUG_COMP",    "Print compiled Function in current scope"));
-      put("codes",   new Pair<String>("DEBUG_CODES",   "Print all codes in current scope [requires 'comp']"));
-      put("lines",   new Pair<String>("DEBUG_LINES",   "Print source lines for codes in current scope [requires 'comp']"));
+      put("master",  "Master");
+      put("prog",    "Show interpret pipeline progress");
+      put("source",  "Print source code being interpreted");
+      put("comp",    "Print compiled Compilation in current scope");
+      put("instrs",  "--Print all instructions in current scope [requires 'comp']");
+      put("locals",  "--Print Locals in current scope [requires 'comp']");
+      put("upvals",  "--Print Upvalues for function in current scope [requires 'comp']");
+      put("exec",    "Trace VM execution");
+      put("rawcode", "--Print int value of code [requires 'exec'?]");
+      put("stack",   "--Print VM Values stack [requires 'exec']");
+      put("globals", "--Print VM globals [requires 'exec']");
     }};
   }
 
-  //printDebugProperties()
-  private void printDebugProperties() {
+  //printDebugStatus()
+  private void printDebugStatus() {
     //print "master" key first
-    String paddedKey = String.format("%-" + 10 + "s", "master");
-    String status = Props.instance().getStatus("DEBUG_MASTER");
-    String paddedStatus = String.format("%-" + 3 + "s", status);
-    System.out.println(paddedKey + ": " + paddedStatus + " Master");
+    printStatus("master", "Master");
 
-    SortedSet<String> keys = new TreeSet<>(replCommands.keySet());
-
-    //loop through remaining keys, sorting alphabetically
-    for (String key : keys) {
+    //loop through remaining keys
+    for (String key : debugCommands.keySet()) {
       if (key == "master") continue; //already printed, skip
 
-      Pair<String> pair = replCommands.get(key);
-      paddedKey = String.format("%-" + 10 + "s", key); 
-      status = Props.instance().getStatus(pair.left());
-      paddedStatus = String.format("%-" + 3 + "s", status); 
-
-      System.out.println(paddedKey + ": " + paddedStatus + " " + pair.right());
-    } //for (String key : keys)
+      printStatus(key, debugCommands.get(key));
+    }
+  }
+  
+  //printStatus(String, String)
+  private void printStatus(String key, String label) {
+    String paddedKey = String.format("%-10s", key);
+    boolean status = Prefs.instance().getBoolean(key);
+    String paddedStatus = String.format("%-5s", status ? "ON" : "OFF");
+    
+    System.out.println(paddedKey + ": " + paddedStatus + " " + label);
   }
 
   //main(String[])

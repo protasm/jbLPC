@@ -1,23 +1,21 @@
 package jbLPC.vm;
 
 import jbLPC.compiler.C_Function;
-import jbLPC.compiler.Compilation;
 
 public class Closure {
-  private Compilation compilation;
+  private C_Function cFunction;
   private Upvalue[] upvalues;
 
   //Closure()
-  public Closure(Compilation compilation) {
-    this.compilation = compilation;
+  public Closure(C_Function cFunction) {
+    this.cFunction = cFunction;
 
-    if (compilation instanceof C_Function)
-      upvalues = new Upvalue[((C_Function)compilation).upvalueCount()];
+    upvalues = new Upvalue[cFunction.upvalueCount()];
   }
 
-  //compilation()
-  public Compilation compilation() {
-    return compilation;
+  //cFunction()
+  public C_Function cFunction() {
+    return cFunction;
   }
 
   //upvalues()
@@ -25,17 +23,9 @@ public class Closure {
     return upvalues;
   }
 
-  //upvalueCount()
-  public int upvalueCount() {
-    if (compilation instanceof C_Function)
-      return ((C_Function)compilation).upvalueCount();
-    else
-      return 0;
-  }
-
   //toString()
   @Override
   public String toString() {
-    return compilation.toString();
+    return cFunction.toString();
   }
 }

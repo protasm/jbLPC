@@ -9,7 +9,7 @@ import jbLPC.parser.Parser;
 public class CallParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
   public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
-    Integer argCount = compiler.argumentList();
+    int argCount = compiler.argumentList();
     Instruction instr = new Instruction(OP_CALL, argCount);
     
     compiler.emitInstruction(instr);

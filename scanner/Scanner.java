@@ -58,20 +58,14 @@ import java.util.Map;
 import jbLPC.debug.Debugger;
 import jbLPC.preprocessor.Preprocessor;
 import jbLPC.preprocessor.source.StringLexerSource;
-import jbLPC.util.Props;
-import jbLPC.util.PropsObserver;
 
-public class Scanner implements PropsObserver, Iterator<Token> {
+public class Scanner implements Iterator<Token> {
   private static final char EOL = '\n';
   private static final Map<String, TokenType> lpcTypes;
   private static final Map<String, TokenType> reservedWords;
   private static final Map<Character, TokenType> oneCharLexemes;
+  
   private ScannableSource ss;
-
-  // Cached properties
-  private boolean debugMaster;
-  private boolean debugPrintProgress;
-  private boolean debugPrintSource;
 
   static {
     lpcTypes = new HashMap<>() {
@@ -123,8 +117,6 @@ public class Scanner implements PropsObserver, Iterator<Token> {
 
   // Scanner(String)
   public Scanner(String source) {
-    Props.instance().registerObserver(this);
-
     try (Preprocessor pp = new Preprocessor()) {
       pp.addInput(new StringLexerSource(source, true));
       pp.getSystemIncludePath().add(".");
@@ -135,10 +127,9 @@ public class Scanner implements PropsObserver, Iterator<Token> {
       e.printStackTrace();
     }
 
-    if (debugPrintSource)
-      Debugger.instance().printSource(ss.toString());
-    if (debugPrintProgress)
-      Debugger.instance().printProgress("Scanner initialized");
+    Debugger.instance().printSource(ss.toString());
+
+    Debugger.instance().printProgress("Scanner initialized");
   }
 
   // lexToken()
@@ -375,29 +366,12 @@ public class Scanner implements PropsObserver, Iterator<Token> {
     throw new UnsupportedOperationException();
   }
 
-  // updateCachedProperties()
-  private void updateCachedProperties() {
-    debugMaster = Props.instance().getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
-    debugPrintSource = debugMaster && Props.instance().getBool("DEBUG_SOURCE");
-  }
-
-  // notifyPropertiesChanged()
-  @Override
-  public void notifyPropertiesChanged() {
-    updateCachedProperties();
-  }
-
   // main(String[])
   public static void main(String[] args) {
-    String propsFile = System.getProperty("user.home") + "/eclipse-workspace/jbLPC/src/jbLPC/props";
-    Props.instance().open(propsFile);
-
     String path = "/Users/jonathan/lib/obj/testobj.c";
-    byte[] bytes;
 
     try {
-      bytes = Files.readAllBytes(Paths.get(path));
+      byte[] bytes = Files.readAllBytes(Paths.get(path));
       String source = new String(bytes, Charset.defaultCharset());
 
       Scanner scanner = new Scanner(source);

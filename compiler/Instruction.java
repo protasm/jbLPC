@@ -1,24 +1,26 @@
 package jbLPC.compiler;
 
+import java.util.Arrays;
+
 public class Instruction {
   private OpCode opCode;
-  private Object[] constants;
+  private Object[] operands;
   private int line;
 
   //Instruction(OpCode)
   public Instruction(OpCode opCode) {
-    this(opCode, new Object[] {});
+    this(opCode, null);
   }
 
   //Instruction(OpCode, Object)
-  public Instruction(OpCode opCode, Object constant) {
-    this(opCode, new Object[] { constant });
+  public Instruction(OpCode opCode, Object operand) {
+    this(opCode, new Object[] { operand });
   }
   
   //Instruction(OpCode, Object[])
-  public Instruction(OpCode opCode, Object[] constants) {
+  public Instruction(OpCode opCode, Object[] operands) {
     this.opCode = opCode;
-    this.constants = constants;
+    this.operands = operands;
     line = 0;
   }
   
@@ -27,9 +29,9 @@ public class Instruction {
     return opCode;
   }
   
-  //constants()
-  public Object[] constants() {
-    return constants;
+  //operands()
+  public Object[] operands() {
+    return operands;
   }
   
   //line()
@@ -45,9 +47,9 @@ public class Instruction {
   //toString()
   @Override
   public String toString() {
-    if (constants.length == 0)
-      return opCode.name();
+    if (operands == null)
+      return String.valueOf(opCode.code());
     else
-      return opCode + " " + constants;
+      return opCode.code() + " " + Arrays.toString(operands);
   }
 }

@@ -9,7 +9,7 @@ import java.util.Stack;
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.C_Script;
 import jbLPC.compiler.Compilation;
-import jbLPC.compiler.CompilerUpvalue;
+//import jbLPC.compiler.CompilerUpvalue;
 import jbLPC.compiler.HasArity;
 import jbLPC.compiler.Instruction;
 import jbLPC.compiler.LPCCompiler;
@@ -21,11 +21,10 @@ import jbLPC.nativefn.NativeFn;
 import jbLPC.nativefn.NativeFoo;
 import jbLPC.nativefn.NativePrint;
 import jbLPC.nativefn.NativePrintLn;
-import jbLPC.util.Props;
-import jbLPC.util.PropsObserver;
+import jbLPC.util.Prefs;
 import jbLPC.util.SourceFile;
 
-public class VM implements PropsObserver {
+public class VM {
   //InterpretResult
   public static enum InterpretResult {
     INTERPRET_OK,
@@ -45,18 +44,11 @@ public class VM implements PropsObserver {
 
   private Map<String, Object> globals;
   private Stack<Object> vStack; //Value stack
-  private Stack<CallFrame> fStack; //CallFrame stack
+  private Stack<RunFrame> fStack; //RunFrame stack
   private Upvalue openUpvalues; //linked list
-
-  //Cached properties
-  private boolean debugMaster;
-  private boolean debugPrintProgress;
-  private boolean debugTraceExecution;
 
   //VM()
   public VM() {
-    Props.instance().registerObserver(this);
-
     globals = new HashMap<>();
 
     defineNativeFn("clock", new NativeClock(this, "Clock", 0));
@@ -67,7 +59,7 @@ public class VM implements PropsObserver {
 
     reset(); //vStack, fStack, openUpvalues
 
-    if (debugPrintProgress) Debugger.instance().printProgress("VM initialized");
+    Debugger.instance().printProgress("VM initialized");
   }
 
   //interpret(String)
@@ -78,57 +70,64 @@ public class VM implements PropsObserver {
     if (cScript == null)
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
-    if (debugPrintProgress)
-      Debugger.instance().printProgress("Executing script '" + name + "'");
+    Debugger.instance().printProgress("Executing script '" + name + "'");
 
-    Closure closure = new Closure(cScript);
+    vStack.push(cScript);
 
-    vStack.push(closure);
-
-    frame(closure, 0); //pushes new CallFrame on fStack
+    frame(cScript);
+    
+    vStack.pop();
 
     return run();
   }
 
   //run()
   private InterpretResult run() {
-    CallFrame frame = fStack.peek(); //cached copy of current CallFrame
-    
+    RunFrame frame = fStack.peek(); //cached copy of current RunFrame
+      
     //reusable scratchpad vars
+    Instruction instr;
     int offset, argCount;
     String key, identifier;
     Object value;
     Closure closure;
     LPCObject lpcObject;
-    Upvalue upvalue;
+//    Upvalue upvalue;
 
     //Bytecode dispatch loop.
     for (;;) {
       //Prior pass may have left a new compilation on
       //the vStack; if so, frame it up to be run immediately.
-      if (vStack.peek() instanceof Compilation) {
+      if (
+        !vStack.isEmpty() &&
+        vStack.peek() instanceof Compilation
+      ) {
         Compilation compilation = (Compilation)vStack.peek();
         
-        if (debugPrintProgress)
-          Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
+        Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
         
-    	  frame(new Closure(compilation), 0);
+    	frame(compilation);
 
-    	  frame = fStack.peek();
+    	frame = fStack.peek();
     	
-    	  vStack.pop();
+    	vStack.pop();
     	  
-    	  continue;
+    	continue;
       }
 
-      if (debugTraceExecution)
-        Debugger.instance().traceExecution(frame, globals, vStack.toArray());
+      instr = frame.next();
       
-      Instruction instr = readInstruction(frame);
+      if (instr == null) {
+    	runtimeError("Unexpected end of instructions in current frame.");
+    	  
+        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+      }
 
+      Debugger.instance().traceExecution(instr, globals, vStack);
+      
       switch (instr.opCode()) {
         case OP_CONST:
-          value = instr.constants()[0];
+          value = instr.operands()[0];
 
           vStack.push(value);
 
@@ -143,7 +142,7 @@ public class VM implements PropsObserver {
         case OP_POP: vStack.pop(); break;
         
         case OP_GET_LOCAL:
-          offset = (int)instr.constants()[0];
+          offset = (int)instr.operands()[0];
           value = vStack.get(frame.base() + offset);
 
           vStack.push(value);
@@ -151,7 +150,7 @@ public class VM implements PropsObserver {
           break;
         
         case OP_SET_LOCAL:
-          offset = (int)instr.constants()[0];
+          offset = (int)instr.operands()[0];
           value = vStack.peek();
 
           vStack.set(frame.base() + offset, value);
@@ -159,7 +158,7 @@ public class VM implements PropsObserver {
           break;
         
         case OP_GLOBAL:
-          key = (String)instr.constants()[0];
+          key = (String)instr.operands()[0];
           value = vStack.peek();
 
           globals.put(key, value);
@@ -169,7 +168,7 @@ public class VM implements PropsObserver {
           break;
         
         case OP_GET_GLOBAL:
-          key = (String)instr.constants()[0];
+          key = (String)instr.operands()[0];
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -181,7 +180,7 @@ public class VM implements PropsObserver {
           break;
         
         case OP_SET_GLOBAL:
-          key = (String)instr.constants()[0];
+          key = (String)instr.operands()[0];
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -194,30 +193,30 @@ public class VM implements PropsObserver {
           break;
         
         case OP_GET_UPVAL:
-          offset = (int)instr.constants()[0]; //upvalue slot
-          upvalue = frame.closure().upvalues()[offset];
-
-          if (upvalue.location() != -1) //i.e., open
-            vStack.push(vStack.get(upvalue.location()));
-          else //i.e., closed
-           vStack.push(upvalue.closedValue());
+//          offset = (int)instr.operands()[0]; //upvalue slot
+//          upvalue = frame.closure().upvalues()[offset];
+//
+//          if (upvalue.location() != -1) //i.e., open
+//            vStack.push(vStack.get(upvalue.location()));
+//          else //i.e., closed
+//           vStack.push(upvalue.closedValue());
 
           break;
         
         case OP_SET_UPVAL:
-          offset = (int)instr.constants()[0];
-          upvalue = frame.closure().upvalues()[offset];
-          value = vStack.peek();
-
-          if (upvalue.location() != -1) //i.e., open
-            vStack.set(upvalue.location(), value);
-          else //i.e., closed
-            upvalue.setClosedValue(value);
+//          offset = (int)instr.operands()[0];
+//          upvalue = frame.closure().upvalues()[offset];
+//          value = vStack.peek();
+//
+//          if (upvalue.location() != -1) //i.e., open
+//            vStack.set(upvalue.location(), value);
+//          else //i.e., closed
+//            upvalue.setClosedValue(value);
 
           break;
 
         case OP_CALL:
-          argCount = (int)instr.constants()[0];
+          argCount = (int)instr.operands()[0];
           value = vStack.get(vStack.size() - 1 - argCount); //callee
 
           if (!callValue(value, argCount))
@@ -228,54 +227,50 @@ public class VM implements PropsObserver {
           break;
         
         case OP_INVOKE:
-          identifier = (String)instr.constants()[0]; //method name
-          argCount = (int)instr.constants()[1];
+          identifier = (String)instr.operands()[0]; //method name
+          argCount = (int)instr.operands()[1];
 
           if (!invoke(identifier, argCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          //invoke should have pushed a new CallFrame (via call()),
-          //so update locally cached frame
           frame = fStack.peek();
 
           break;
         
         case OP_SUPER_INVOKE:
-          identifier = (String)instr.constants()[0]; //method name
-          argCount = (int)instr.constants()[0];
+          identifier = (String)instr.operands()[0]; //method name
+          argCount = (int)instr.operands()[0];
           lpcObject = (LPCObject)vStack.pop(); //super object
 
           if (!invokeFromObject(lpcObject, identifier, argCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
-          //invokeFromObject should have pushed a new CallFrame (via call()),
-          //so update locally cached frame
           frame = fStack.peek();
 
           break;
         
         case OP_CLOSURE:
-          C_Function cFunction = (C_Function)instr.constants()[0];
-          CompilerUpvalue[] compilerUpvalues = (CompilerUpvalue[])instr.constants()[1];
+          C_Function cFunction = (C_Function)instr.operands()[0];
+//          CompilerUpvalue[] compilerUpvalues = (CompilerUpvalue[])instr.operands()[1];
           closure = new Closure(cFunction);
 
           vStack.push(closure);
 
-          for (int i = 0; i < closure.upvalueCount(); i++) {
-            boolean isLocal = compilerUpvalues[i].isLocal();
-            int index = compilerUpvalues[i].index();
-            
-            if (isLocal)
-              closure.upvalues()[i] = captureUpvalue(frame.base() + index);
-            else
-              closure.upvalues()[i] = frame.closure().upvalues()[index];
-          }
+//          for (int i = 0; i < closure.upvalueCount(); i++) {
+//            boolean isLocal = compilerUpvalues[i].isLocal();
+//            int index = compilerUpvalues[i].index();
+//            
+//            if (isLocal)
+//              closure.upvalues()[i] = captureUpvalue(frame.base() + index);
+//            else
+//              closure.upvalues()[i] = frame.closure().upvalues()[index];
+//          }
 
           break;
         
         case OP_CLOSE_UPVAL:
           //close the upvalue at the top of the vStack
-          closeUpvalues(vStack.size() - 1);
+//          closeUpvalues(vStack.size() - 1);
 
           vStack.pop();
 
@@ -287,19 +282,19 @@ public class VM implements PropsObserver {
           //hold onto a reference to it.
           value = vStack.pop();
 
-          closeUpvalues(frame.base());
+//          closeUpvalues(frame.base());
 
-          //discard the CallFrame for the returning function
+          //pop the RunFrame for the returning function
           fStack.pop();
 
-          if (fStack.size() == 0) { //entire program finished
-            vStack.pop();
+          if (fStack.isEmpty()) { //entire program finished
+//            vStack.pop();
 
             //exit the bytecode dispatch loop
             return InterpretResult.INTERPRET_OK;
           }
 
-          //pop the vStack back to CallFrame base
+          //pop the vStack back to expiring RunFrame's base
           while (vStack.size() > frame.base())
             vStack.pop();
 
@@ -309,9 +304,9 @@ public class VM implements PropsObserver {
           frame = fStack.peek();
 
           break;
-        
+
         case OP_COMPILE:
-          identifier = (String)instr.constants()[0];
+          identifier = (String)instr.operands()[0];
           Compilation compilation = compilation(identifier);
 
           vStack.push(compilation);
@@ -346,7 +341,7 @@ public class VM implements PropsObserver {
           break;
 
         case OP_OBJECT: //Create a new, empty LPCObject
-          identifier = (String)instr.constants()[0];
+          identifier = (String)instr.operands()[0];
           lpcObject = new LPCObject(identifier);
 
           vStack.push(lpcObject);
@@ -362,7 +357,7 @@ public class VM implements PropsObserver {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
           
-          key = (String)instr.constants()[0];
+          key = (String)instr.operands()[0];
           lpcObject = (LPCObject)value;
 
           //Look first for a matching field.
@@ -400,7 +395,7 @@ public class VM implements PropsObserver {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
             
-          key = (String)instr.constants()[0];
+          key = (String)instr.operands()[0];
           lpcObject = (LPCObject)value;
 
           //Look for a matching field.
@@ -425,7 +420,7 @@ public class VM implements PropsObserver {
           break;
           
         case OP_FIELD: //Define a new field in an LPCObject
-          identifier = (String)instr.constants()[0]; //field name
+          identifier = (String)instr.operands()[0]; //field name
           value = vStack.peek();
           lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
 
@@ -436,7 +431,7 @@ public class VM implements PropsObserver {
           break;
           
         case OP_METHOD: //Define a new method in an LPCObject
-          identifier = (String)instr.constants()[0]; //method name
+          identifier = (String)instr.operands()[0]; //method name
           closure = (Closure)vStack.peek();
           lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
 
@@ -519,25 +514,25 @@ public class VM implements PropsObserver {
             break;
           
           case OP_JUMP:
-            offset = (int)instr.constants()[0];
+            offset = (int)instr.operands()[0];
 
-            frame.setIP(frame.ip() + offset);
+//            frame.setIP(frame.ip() + offset);
 
             break;
           
           case OP_JUMP_IF_FALSE:
-            offset = (int)instr.constants()[0];
+            offset = (int)instr.operands()[0];
             value = vStack.peek();
 
-            if (isFalsey(value))
-              frame.setIP(frame.ip() + offset);
+//            if (isFalsey(value))
+//              frame.setIP(frame.ip() + offset);
 
             break;
           
           case OP_LOOP:
-            offset = (int)instr.constants()[0];
+            offset = (int)instr.operands()[0];
 
-            frame.setIP(frame.ip() - offset);
+//            frame.setIP(frame.ip() - offset);
 
             break;
             
@@ -554,7 +549,7 @@ public class VM implements PropsObserver {
   //reset()
   private void reset() {
     vStack = new Stack<Object>();
-    fStack = new Stack<CallFrame>();
+    fStack = new Stack<RunFrame>();
     openUpvalues = null;
   }
 
@@ -565,11 +560,11 @@ public class VM implements PropsObserver {
     for (String s : args)
       System.err.println(s);
 
-    //loop through CallFrames on fStack in reverse order
+    //loop through RunFrames on fStack in reverse order
     for (int i = fStack.size() - 1; i >=0; i--) {
-      CallFrame frame = fStack.get(i);
-      Compilation compilation = frame.closure().compilation();
-      int line = compilation.instructions().get(frame.ip() - 1).line();
+      RunFrame frame = fStack.get(i);
+      Compilation compilation = frame.compilation();
+      int line = frame.previous().line();
 
       System.err.print("[line " + line + "] in ");
 
@@ -601,54 +596,36 @@ public class VM implements PropsObserver {
   }
 
   //callValue(Object, int)
-  //This function is a dispatcher; when we want to call a value
-  //from the vStack, first we need to know (by testing) what kind
-  //of callable object it is (e.g. Closure, NativeFn, etc.)
   private boolean callValue(Object callee, int argCount) {
-	//Compilation
-	if (callee instanceof Compilation) {
-		Closure closure = new Closure((Compilation) callee);
-		
-		return frame(closure, 0);
-    //Closure
-	} else if (callee instanceof Closure)
-      return frame((Closure)callee, argCount);
+	//C_Function
+	if (callee instanceof C_Function)
+      return frame((C_Function)callee, argCount);
     //Native Function
     else if (callee instanceof NativeFn)
       return call((NativeFn)callee, argCount);
 
-    runtimeError("Can only call methods and native functions.");
+    runtimeError("Can only call functions and methods.");
 
     return false;
   }
 
-  //call(Closure, int)
-  //"Calling" a Closure means checking that the argCount is right,
-  //making sure the fStack can accept a new CallFrame, creating a
-  //new CallFrame with the appropriate base pointer, and then
-  //pushing the new CallFrame on the fStack.  Next time run() cycles
-  //through, it will update its locally-cached frame variable to the
-  //new CallFrame at the top of fStack, and execute its opCodes.
-  private boolean frame(Closure closure, int argCount) {
-    if (
-      closure.compilation() instanceof C_Function &&
-      !checkArity((C_Function)closure.compilation(), argCount)
-    )
+  //frame(C_Function, int)
+  private boolean frame(C_Function cFunction, int argCount) {
+    if (!checkArity(cFunction, argCount))
       return false;
 
-    if (fStack.size() == Props.instance().getInt("MAX_FRAMES")) {
-      runtimeError("Stack overflow.");
-
-      return false;
-    }
-
-    //CallFrame window on value stack begins at slot
-    //occupied by function.
     int base = vStack.size() - 1 - argCount;
 
-    fStack.push(new CallFrame(closure, base));
+    fStack.push(new RunFrame(cFunction, base));
 
     return true;
+  }
+  
+  //frame(Compilation)
+  private void frame(Compilation compilation) {
+	  int base = vStack.size() - 1;
+	  
+	  fStack.push(new RunFrame(compilation, base));
   }
 
   //call(NativeFn, int)
@@ -679,9 +656,9 @@ public class VM implements PropsObserver {
       return false;
     }
 
-    Closure method = lpcObject.methods().get(methodName);
+    Closure closure = lpcObject.methods().get(methodName);
 
-    return frame(method, argCount);
+    return frame(closure.cFunction(), argCount);
   }
 
   //invoke(String, int)
@@ -771,14 +748,14 @@ public class VM implements PropsObserver {
       vStack.push(a.equals(b));
   }
 
-  private Instruction readInstruction(CallFrame frame) {
+//  private Instruction readInstruction(RunFrame frame) {
     //Do some caching to optimize all these lookups!
-    Compilation compilation = frame.closure().compilation();
-    List<Instruction> instrs = compilation.instructions();
-    Instruction instr = instrs.get(frame.getAndIncrementIP());
-    
-    return instr;
-  }
+//    Compilation compilation = frame.closure().cFunction();
+//    List<Instruction> instrs = compilation.instructions();
+//    Instruction instr = instrs.get(frame.getAndIncrementIP());
+//    
+//    return instr;
+//  }
 
   //oneNumericOperand()
   private boolean oneNumericOperand() {
@@ -885,18 +862,6 @@ public class VM implements PropsObserver {
 
   //getLibPath()
   public String getLibPath() {
-    return Props.instance().getString("PATH_LIB");
-  }
-
-  //updateCachedProperties()
-  private void updateCachedProperties() {
-    debugMaster = Props.instance().getBool("DEBUG_MASTER");
-    debugPrintProgress = debugMaster && Props.instance().getBool("DEBUG_PROG");
-    debugTraceExecution = debugMaster && Props.instance().getBool("DEBUG_EXEC");
-  }
-
-  //notifyPropertiesChanged()
-  public void notifyPropertiesChanged() {
-    updateCachedProperties();
+    return Prefs.instance().getString("PATH_LIB");
   }
 }
