@@ -12,7 +12,7 @@ public class NativeCompileLPCObject extends NativeFn {
   //execute(Object[])
   @Override
   public Object execute(Object[] args) {
-    String path = (String)args[0];
+    String path = (String)args[0]; //object path
     Compilation compilation = vm.compilation(path);
 
     return compilation;

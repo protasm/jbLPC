@@ -9,9 +9,9 @@ import jbLPC.parser.Parser;
 public class NumberParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
   public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
-    Object value = parser.previous().literal();
-    Instruction instr = new Instruction(OP_CONST, value);
+    Object number = parser.previous().literal();
+    Instruction instr = new Instruction(OP_CONST, number);
 
-    compiler.emitInstruction(instr);
+    compiler.currInstructions().add(instr);
   }
 }

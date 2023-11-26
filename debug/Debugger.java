@@ -1,8 +1,8 @@
 package jbLPC.debug;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Stack;
-import java.util.stream.Collectors;
 
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.Compilation;
@@ -15,8 +15,11 @@ public class Debugger {
   private static Debugger _instance; //singleton
 
   private static final String COLOR_RESET = "\033[0m";
-  private static final String COLOR_RED = "\033[31m";
+//  private static final String COLOR_RED = "\033[31m";
   private static final String COLOR_GREEN = "\033[32m";
+  private static final String COLOR_YELLOW = "\033[33m";
+//  private static final String COLOR_BLUE = "\033[34m";
+  private static final String COLOR_MAGENTA = "\033[35m";
   private static final String COLOR_CYAN = "\033[36m";
 
   //instance()
@@ -30,6 +33,8 @@ public class Debugger {
 
     return _instance;
   }
+  
+  private static int lastLine = 0;
 
   //printBanner(String)
   public void printBanner(String text) {
@@ -65,18 +70,25 @@ public class Debugger {
 
     //codes
     if (Prefs.instance().getBoolean("codes")) {
-      System.out.println("Codes: " + COLOR_RED + compilation.instructions() + COLOR_RESET);
+      System.out.print("Codes: ");
+      System.out.print(COLOR_MAGENTA);;
+      System.out.print(prettyList(compilation.instructions()));
+      System.out.println(COLOR_RESET);
     }
 
     //locals
-    if (Prefs.instance().getBoolean("locals"))
-      System.out.println("Locals: " + scope.locals());
+    if (Prefs.instance().getBoolean("locals")) {
+      System.out.print("Locals: ");
+      System.out.println(prettyList(scope.locals()));
+    }
 
 //    if (Prefs.instance().getBoolean("upvals"))
 //      System.out.println("Upvalues: " + scope.upvalues());
 
     for (Instruction instr : compilation.instructions())
       disassembleInstruction(instr);
+
+    lastLine = 0;
   }
 
   //traceExecution(Instruction, Map<String, Object>, Stack<Object>)
@@ -89,35 +101,27 @@ public class Debugger {
     if (Prefs.instance().getBoolean("globals")) {
       System.out.print(Debugger.COLOR_CYAN);
       System.out.print("Globals: ");
-
       System.out.print(
-        globals.entrySet()
-          .stream()
-          .filter(item -> !(item.getValue() instanceof NativeFn))
-          .collect(Collectors.toList())
+    	prettyList(
+          globals.entrySet()
+            .stream()
+            .filter(item -> !(item.getValue() instanceof NativeFn))
+            .toArray()
+        )
       );
-
-      System.out.print(Debugger.COLOR_RESET + "\n");
+      System.out.print(Debugger.COLOR_RESET);
+      System.out.print("\n");
     }
 
     //vStack
     if (Prefs.instance().getBoolean("stack")) {
       System.out.print(Debugger.COLOR_GREEN + "Stack: ");
-
-//      for (Object value : vStack) {
-//        if (value instanceof String)
-//          System.out.print("[ \"" + value + "\" ]");
-//        else
-//          System.out.print("[ " + value + " ]");
-//
-//      }
-      System.out.print(vStack);
-
+      System.out.print(prettyList(vStack));
       System.out.print(Debugger.COLOR_RESET);
-      System.out.println("\n");
+      System.out.print("\n");
     }
 
-    //disassemble instruction
+    //instruction
     disassembleInstruction(instr);
   }
 
@@ -125,105 +129,50 @@ public class Debugger {
   public void disassembleInstruction(Instruction instr) {
     //OpCode offset
 //    System.out.print(String.format("%04d", offset));
+	int line = instr.line();
+	    
+    System.out.print(COLOR_YELLOW);
 
     //Line number
-//    if (
-//      (offset > 0) &&
-//      (chunk.lines().get(offset) == chunk.lines().get(offset - 1))
-//    )
-//      System.out.print("   | ");
-//    else
-    System.out.print(String.format("%4d ", instr.line()));
-
-    //integer value of opCode
-    if (Prefs.instance().getBoolean("rawcode"))
-      System.out.print("(" + COLOR_RED + String.format("%02d", instr.opCode().code()) + COLOR_RESET + ") ");
+    if (line == lastLine)
+      System.out.print("   | ");
+    else
+      System.out.print(String.format("%4d ", line));
     
+    lastLine = line;
+
+    //rawcode
+    if (Prefs.instance().getBoolean("rawcode")) {
+      System.out.print("(");
+      System.out.print(COLOR_MAGENTA);
+      System.out.print(String.format("%02d", instr.opCode().code()));
+      System.out.print(COLOR_YELLOW);
+      System.out.print(") ");
+    }
+
     printOpCode(instr);
 
-    switch (instr.opCode()) {
-      case OP_CONST:
-        constantInstruction(instr); break;
-      case OP_NIL:
-        simpleInstruction(instr); break;
-      case OP_TRUE:
-        simpleInstruction(instr); break;
-      case OP_FALSE:
-        simpleInstruction(instr); break;
-      case OP_POP:
-        simpleInstruction(instr); break;
-      case OP_GET_LOCAL:
-        oneOperandInstruction(instr); break;
-      case OP_SET_LOCAL:
-        oneOperandInstruction(instr); break;
-      case OP_GLOBAL:
-        constantInstruction(instr); break;
-      case OP_GET_GLOBAL:
-        constantInstruction(instr); break;
-      case OP_SET_GLOBAL:
-        constantInstruction(instr); break;
-      case OP_GET_UPVAL:
-        oneOperandInstruction(instr); break;
-      case OP_SET_UPVAL:
-        oneOperandInstruction(instr); break;
-      case OP_GET_PROP:
-        constantInstruction(instr); break;
-      case OP_SET_PROP:
-        constantInstruction(instr); break;
-      case OP_GET_SUPER:
-        constantInstruction(instr); break;
-      case OP_EQUAL:
-        simpleInstruction(instr); break;
-      case OP_GREATER:
-        simpleInstruction(instr); break;
-      case OP_LESS:
-        simpleInstruction(instr); break;
-      case OP_ADD:
-        simpleInstruction(instr); break;
-      case OP_SUBTRACT:
-        simpleInstruction(instr); break;
-      case OP_MULTIPLY:
-        simpleInstruction(instr); break;
-      case OP_DIVIDE:
-        simpleInstruction(instr); break;
-      case OP_NOT:
-        simpleInstruction(instr); break;
-      case OP_NEGATE:
-        simpleInstruction(instr); break;
-      case OP_JUMP:
-        jumpInstruction(instr, 1); break;
-      case OP_JUMP_IF_FALSE:
-        jumpInstruction(instr, 1); break;
-      case OP_LOOP:
-        jumpInstruction(instr, -1); break;
-      case OP_CALL:
-        oneOperandInstruction(instr); break;
-      case OP_INVOKE:
-        invokeInstruction(instr); break;
-      case OP_SUPER_INVOKE:
-        invokeInstruction(instr); break;
-      case OP_CLOSURE:
+    switch (instr.opCode().type()) {
+      case TYPE_CLOSURE:
         closureInstruction(instr); break;
-      case OP_CLOSE_UPVAL:
-        simpleInstruction(instr); break;
-      case OP_RETURN:
-        simpleInstruction(instr); break;
-      case OP_INHERIT:
-        simpleInstruction(instr); break;
-      case OP_OBJECT:
+      case TYPE_CONST:
         constantInstruction(instr); break;
-      case OP_FIELD:
-        constantInstruction(instr); break;
-      case OP_METHOD:
-        constantInstruction(instr); break;
-      case OP_COMPILE:
-        constantInstruction(instr); break;
+      case TYPE_INVOKE:
+          invokeInstruction(instr); break;
+      case TYPE_JUMP:
+          jumpInstruction(instr, 1); break;
+      case TYPE_OPERAND:
+        operandInstruction(instr); break;
+      case TYPE_SIMPLE:
+          simpleInstruction(instr); break;
       default:
         System.out.print("Unknown opcode: ");
           printOpCode(instr, true);
         
         break;
     }
+    
+	System.out.print(COLOR_RESET);
   }
 
   //closureInstruction(Instruction)
@@ -247,10 +196,12 @@ public class Debugger {
   private void constantInstruction(Instruction instr) {
     Object constant = instr.operands()[0];
 
+    System.out.print(COLOR_MAGENTA);
     if (constant instanceof String)
       System.out.println("\"" + constant + "\"");
     else
-      System.out.println("\"" + constant + "\"");
+      System.out.println(constant);
+    System.out.print(COLOR_YELLOW);
   }
 
   //invokeInstruction(Instruction)
@@ -258,21 +209,9 @@ public class Debugger {
     String identifier = (String)instr.operands()[0]; //method name
     int argCount = (int)instr.operands()[1];
 
-    //method name
     System.out.print("(\"" + identifier + "\")");
 
-    //argument count
     System.out.println(String.format(" (%d args)\n", argCount));
-  }
-
-  //simpleInstruction(Instruction)
-  private void simpleInstruction(Instruction instr) {
-   System.out.println("");
-  }
-  
-  //oneOperandInstruction(Instruction)
-  private void oneOperandInstruction(Instruction instr) {
-    System.out.println("TODO: finish oneOperandInstruction in Debugger class!");
   }
 
   //jumpInstruction(Instruction, int)
@@ -282,6 +221,16 @@ public class Debugger {
     System.out.println("TODO: finish jumpInstruction in Debugger class!");
 //    System.out.print(String.format("%-16s %4d -> %d\n",
 //      instr.opCode(), offset, offset + 3 + (sign * operand)));
+  }
+  
+  //operandInstruction(Instruction)
+  private void operandInstruction(Instruction instr) {
+    System.out.println("TODO: finish operandInstruction in Debugger class!");
+  }
+
+  //simpleInstruction(Instruction)
+  private void simpleInstruction(Instruction instr) {
+   System.out.println("");
   }
   
   //printOpCode(Instruction)
@@ -294,5 +243,42 @@ public class Debugger {
     System.out.print(String.format("%-16s ", instr.opCode()));
     
     if (EOL) System.out.print("\n");
+  }
+  
+  //prettyList(Stack)
+  @SuppressWarnings("rawtypes")
+  private String prettyList(Stack items) {
+    return prettyList(items.toArray());
+  }
+
+  //prettyList(List)
+  @SuppressWarnings("rawtypes")
+  private String prettyList(List items) {
+	  return prettyList(items.toArray());
+  }
+  
+  //prettyList(Object[])
+  private String prettyList(Object[] items) {
+	  StringBuilder sb = new StringBuilder();
+	  
+	  sb.append("[ ");
+
+	  for (int i = 0; i < items.length; i++) {
+	    Object item = items[i];
+	    
+	    if (item instanceof String)
+	      sb.append("\"" + item + "\"");
+	    else if (item == null)
+	      sb.append("nil");
+	    else
+	      sb.append(item);
+	    
+        if (i < items.length - 1)
+          sb.append(", ");
+	  }
+	  
+	  sb.append(" ]");
+	  
+	  return sb.toString();
   }
 }

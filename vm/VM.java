@@ -168,7 +168,7 @@ public class VM {
           break;
         
         case OP_GET_GLOBAL:
-          key = (String)instr.operands()[0];
+          key = (String)instr.operands()[0]; //global name
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -180,7 +180,7 @@ public class VM {
           break;
         
         case OP_SET_GLOBAL:
-          key = (String)instr.operands()[0];
+          key = (String)instr.operands()[0]; //global name
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -583,8 +583,7 @@ public class VM {
   }
 
   public Compilation compilation(String path) {
-    String libPath = getLibPath();
-    String fullPath = libPath + path;
+    String fullPath = getLibPath() + path;
     SourceFile file  = new SourceFile(fullPath);
     LPCObjectCompiler compiler = new LPCObjectCompiler();
 

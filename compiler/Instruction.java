@@ -6,6 +6,11 @@ public class Instruction {
   private OpCode opCode;
   private Object[] operands;
   private int line;
+  
+  //Instruction()
+  public Instruction() { //necessary?
+    this(null, null);
+  }
 
   //Instruction(OpCode)
   public Instruction(OpCode opCode) {
@@ -16,7 +21,7 @@ public class Instruction {
   public Instruction(OpCode opCode, Object operand) {
     this(opCode, new Object[] { operand });
   }
-  
+
   //Instruction(OpCode, Object[])
   public Instruction(OpCode opCode, Object[] operands) {
     this.opCode = opCode;
@@ -29,9 +34,23 @@ public class Instruction {
     return opCode;
   }
   
+  //setOpCode(OpCode)
+  public void setOpCode(OpCode opCode) {
+    this.opCode = opCode;
+  }
+  
   //operands()
   public Object[] operands() {
     return operands;
+  }
+  
+  //addOperand(Object)
+  public void addOperand(Object operand) {
+	  Object[] newOperands = Arrays.copyOf(operands, operands.length + 1);
+	  
+	  newOperands[operands.length - 1] = operand;
+	  
+	  operands = newOperands;
   }
   
   //line()

@@ -88,8 +88,10 @@ public class LPCObjectCompiler extends LPCCompiler {
     return compiledObject;
   }
 
-  //field()
-  private void field(int index) {
+  //fieldDeclaration()
+  private void fieldDeclaration() {
+	parseVariable("Expect field name.");
+	
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
@@ -103,11 +105,7 @@ public class LPCObjectCompiler extends LPCCompiler {
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
     if (parser.match(TOKEN_COMMA)) {
-      parser.consume(TOKEN_IDENTIFIER, "Expect field name.");
-
-      int nextIndex = makeConstant(parser.previous().lexeme());
-
-      field(nextIndex);
+      fieldDeclaration();
 
       return;
     }
@@ -156,14 +154,6 @@ public class LPCObjectCompiler extends LPCCompiler {
     return makeConstant(object);
   }
 
-  //method(int)
-  private void method(int index) {
-    funDeclaration(index);
-
-    emitOpCode(OP_METHOD);
-    emitArgCode(index);
-  }
-
   //namedVariable(Token, boolean)
   //generates code to load a variable, whose name equals the
   //given Token's lexeme, onto the vStack.
@@ -177,9 +167,9 @@ public class LPCObjectCompiler extends LPCCompiler {
     if (arg != -1) { //local variable
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
-    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
-      getOp = OP_GET_UPVAL;
-      setOp = OP_SET_UPVAL;
+//    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
+//      getOp = OP_GET_UPVAL;
+//      setOp = OP_SET_UPVAL;
     } else { //field
       emitOpCode(OP_GET_LOCAL);
       emitArgCode(0); //correct way to do this?
@@ -212,11 +202,12 @@ public class LPCObjectCompiler extends LPCCompiler {
   //typedDeclaration()
   @Override
   protected void typedDeclaration() {
-    int index = parseVariable("Expect method or field name.");
-
-    if (parser.check(TOKEN_LEFT_PAREN))
-      method(index);
-    else
-      field(index);
+    if (!parser.check(TOKEN_LEFT_PAREN))
+      fieldDeclaration();
+    else {
+      funDeclaration();
+      
+      //emit OP_METHOD instruction
+    }
   }
 }

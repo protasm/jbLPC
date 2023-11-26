@@ -12,6 +12,6 @@ public class StringParselet implements Parselet {
     Object value = parser.previous().literal();
     Instruction instr = new Instruction(OP_CONST, value);
 
-    compiler.emitInstruction(instr);
+    compiler.currInstructions().add(instr);
   }
 }
