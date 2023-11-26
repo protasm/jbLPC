@@ -1,15 +1,18 @@
 package jbLPC.debug;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
 import jbLPC.compiler.C_Function;
+import jbLPC.compiler.C_InstrList;
 import jbLPC.compiler.C_Compilation;
 import jbLPC.compiler.C_OpCode;
 import jbLPC.compiler.C_Scope;
 import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Prefs;
+import jbLPC.vm.RunFrame;
 
 public class Debugger {
   private static Debugger _instance; //singleton
@@ -58,37 +61,42 @@ public class Debugger {
     System.out.println((source.length() == 0) ? "[ no source ]" : source);
   }
 
-  //traceCompilation(C_Scope)
-  public void traceCompilation(C_Scope cScope) {
+  //disassembleScope(C_Scope)
+  public void disassembleScope(C_Scope scope) {
 	  if (!Prefs.instance().getBoolean("comp")) return;
 	
-	  C_Compilation cCompilation = cScope.compilation();
+	  C_Compilation compilation = scope.compilation();
+	  C_InstrList instrList = compilation.instrList();
+	  List<Byte> instructions = instrList.instructions();
 
-    printBanner(cCompilation.toString());
+    printBanner(compilation.toString());
 
     //codes
     if (Prefs.instance().getBoolean("codes")) {
       System.out.print("Codes: ");
       System.out.print(COLOR_MAGENTA);;
-      System.out.print(prettyList(cCompilation.instrList().instructions()));
+      System.out.print(prettyList(instructions));
       System.out.println(COLOR_RESET);
     }
 
     //locals
     if (Prefs.instance().getBoolean("locals")) {
       System.out.print("Locals: ");
-      System.out.println(prettyList(cScope.locals()));
+      System.out.println(prettyList(scope.locals()));
     }
 
-//    if (Prefs.instance().getBoolean("upvals"))
-//      System.out.println("Upvalues: " + scope.upvalues());
+    //upvalues
+    if (Prefs.instance().getBoolean("upvals")) {
+      System.out.println("Upvalues: ");
+      System.out.println(prettyList(scope.upvalues()));
+    }
 
-    for (Instruction instr : cCompilation.instrList().instructions())
-      disassembleInstruction(instr);
+    for (int index = 0; index < instructions.size();)
+      index = disassembleInstruction(instrList, index);
   }
 
-  //traceExecution(OpCode, Map<String, Object>, Stack<Object>)
-  public void traceExecution(C_OpCode cOpCode, Map<String, Object> globals, Stack<Object> vStack) {
+  //traceExecution(RunFrame, Map<String, Object>, Stack<Object>)
+  public void traceExecution(RunFrame frame, Map<String, Object> globals, Stack<Object> vStack) {
     if (!Prefs.instance().getBoolean("exec")) return;
 
     System.out.print("\n");
@@ -118,50 +126,54 @@ public class Debugger {
     }
 
     //instruction
-    disassembleInstruction(cOpCode);
+    disassembleInstruction(frame.compilation().instrList(), frame.nextIndex());
   }
 
-  //disassembleInstruction(OpCode)
-  public void disassembleInstruction(C_OpCode cOpCode) {
-    //OpCode offset
-//    System.out.print(String.format("%04d", offset));
-//	  int line = instr.line();
+  //disassembleInstruction(C_InstrList, int)
+  public int disassembleInstruction(C_InstrList instrList, int index) {
+    byte opCode = instrList.instructions().get(index);
+
+    //offset
+    System.out.print(String.format("%04d", index));
 	    
     System.out.print(COLOR_YELLOW);
 
     //Line number
-    if (line == lastLine)
+    if (
+      (index > 0) &&
+      (instrList.lines().get(index) == instrList.lines().get(index - 1))
+    )
       System.out.print("   | ");
     else
-      System.out.print(String.format("%4d ", line));
-    
+      System.out.print(String.format("%4d ", instrList.lines().get(index)));
+
     //rawcode
     if (Prefs.instance().getBoolean("rawcode")) {
       System.out.print("(");
       System.out.print(COLOR_MAGENTA);
-      System.out.print(String.format("%02d", cOpCode.code()));
+      System.out.print(String.format("0x%02X", opCode));
       System.out.print(COLOR_YELLOW);
       System.out.print(") ");
     }
 
-    printOpCode(cOpCode);
+    printOpCode(opCode);
 
-    switch (cOpCode.type()) {
+    switch (opCode.type()) {
       case TYPE_CLOSURE:
-        closureInstruction(cOpCode); break;
+        closureInstruction(instrList); break;
       case TYPE_CONST:
-        constantInstruction(cOpCode); break;
+        constantInstruction(instrList); break;
       case TYPE_INVOKE:
-          invokeInstruction(cOpCode); break;
+          invokeInstruction(instrList); break;
       case TYPE_JUMP:
-          jumpInstruction(cOpCode, 1); break;
+          jumpInstruction(instrList, 1); break;
       case TYPE_OPERAND:
-        operandInstruction(cOpCode); break;
+        operandInstruction(instrList); break;
       case TYPE_SIMPLE:
-          simpleInstruction(cOpCode); break;
+          simpleInstruction(instrList); break;
       default:
         System.out.print("Unknown opcode: ");
-          printOpCode(cOpCode, true);
+          printOpCode(opCode, true);
         
         break;
     }
@@ -228,13 +240,13 @@ public class Debugger {
   }
   
   //printOpCode(C_OpCode)
-  private void printOpCode(C_OpCode cOpCode) {
-    printOpCode(cOpCode, false);
+  private void printOpCode(C_OpCode opCode) {
+    printOpCode(opCode, false);
   }
   
   //printOpCode(C_OpCode, boolean)
-  private void printOpCode(C_OpCode cOpCode, boolean EOL) {
-    System.out.print(String.format("%-16s ", cOpCode));
+  private void printOpCode(C_OpCode opCode, boolean EOL) {
+    System.out.print(String.format("%-16s ", opCode));
     
     if (EOL) System.out.print("\n");
   }

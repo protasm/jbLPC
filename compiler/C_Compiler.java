@@ -94,7 +94,7 @@ public class C_Compiler {
     currInstrList().addInstr(OP_NIL); //return value; always null for a Script
     currInstrList().addInstr(OP_RETURN);
 
-    Debugger.instance().traceCompilation(currScope);
+    Debugger.instance().disassembleScope(currScope);
     
     return currScope.compilation();
   }
@@ -318,7 +318,7 @@ public class C_Compiler {
     function.setUpvalueCount(currScope.upvalues().size());
 
     if (!parser.hadError())
-      Debugger.instance().traceCompilation(currScope);
+      Debugger.instance().disassembleScope(currScope);
 
     //Step up to higher scope.
     currScope = currScope.enclosing();

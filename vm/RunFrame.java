@@ -1,26 +1,25 @@
 package jbLPC.vm;
 
-import java.util.Iterator;
 import java.util.ListIterator;
 
 import jbLPC.compiler.C_Compilation;
 
-public class RunFrame implements Iterator<Byte> {
-  private C_Compilation cCompilation;
+public class RunFrame implements ListIterator<Byte> {
+  private C_Compilation compilation;
   private int base; //index of bottom-most vStack value in this frame
-  Iterator<Byte> iterator;
+  ListIterator<Byte> iterator;
 
   //RunFrame(Compilation, int)
-  RunFrame(C_Compilation cCompilation, int base) {
-    this.cCompilation = cCompilation;
+  RunFrame(C_Compilation compilation, int base) {
+    this.compilation = compilation;
     this.base = base;
 
-    iterator = cCompilation.instrList().instructions().listIterator();
+    iterator = compilation.instrList().instructions().listIterator();
   }
 
-  //cCompilation()
-  public C_Compilation cCompilation() {
-    return cCompilation;
+  //compilation()
+  public C_Compilation compilation() {
+    return compilation;
   }
 
   //base()
@@ -40,17 +39,47 @@ public class RunFrame implements Iterator<Byte> {
   
   //hasPrevious()
   public boolean hasPrevious() {
-    return ((ListIterator<Byte>)iterator).hasPrevious();
+    return iterator.hasPrevious();
   }
   
   //previous()
   public Byte previous() {
-    return ((ListIterator<Byte>)iterator).previous();
+    return iterator.previous();
   }
 
   //toString()
   @Override
   public String toString() {
-    return "@Frame: " + cCompilation + "@";
+    return "@Frame: " + compilation + "@";
+  }
+
+ 
+  @Override
+  public int nextIndex() {
+    return iterator.nextIndex();
+  }
+
+  
+  @Override
+  public int previousIndex() {
+    return iterator.previousIndex();
+  }
+
+  
+  @Override
+  public void remove() {
+    iterator.remove();
+  }
+
+  
+  @Override
+  public void set(Byte e) {
+    iterator.set(e);
+  }
+
+  
+  @Override
+  public void add(Byte e) {
+    iterator.add(e);
   }
 }

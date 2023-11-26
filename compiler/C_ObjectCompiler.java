@@ -76,7 +76,7 @@ public class C_ObjectCompiler extends C_Compiler {
     //end compilation
     emitInstruction(OP_RETURN);
 
-    Debugger.instance().traceCompilation(currScope);
+    Debugger.instance().disassembleScope(currScope);
 
     C_Compilation compiledObject = currScope.compilation();
     
