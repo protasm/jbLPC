@@ -4,40 +4,40 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class C_InstrList {
-  private List<Byte> instructions;
+  private List<Byte> codes;
   private List<Object> constants;
   private List<Integer> lines;
   
   //C_InstrList()
   public C_InstrList() {
-    instructions = new ArrayList<>();
+    codes = new ArrayList<>();
     constants = new ArrayList<>();
     lines = new ArrayList<>();
   }
   
   //instructions()
-  public List<Byte> instructions() {
-    return instructions;
+  public List<Byte> codes() {
+    return codes;
   }
   
-  //addInstr(OpCode)
-  public void addInstr(C_OpCode c_OpCode) {
-    addInstr(c_OpCode.code());
+  //addCode(int)
+  public void addCode(int code) {
+    addCode((byte)code);
   }
   
-  //addInstr(Byte)
-  public void addInstr(Byte instr) {
-    addInstr(instr, -1);
+  //addCode(byte)
+  public void addCode(byte code) {
+    addCode(code, -1);
+  }
+  
+  //addCode(int, int)
+  public void addCode(int code, int line) {
+    addCode((byte)code, line);
   }
 
-  //addInstr(OpCode, line)
-  public void addInstr(C_OpCode c_OpCode, int line) {
-    addInstr(c_OpCode.code(), line);
-  }
-
-  //addInstr(Byte, int)
-  public void addInstr(Byte instr, int line) {
-    instructions.add(instr);
+  //addCode(byte, int)
+  public void addCode(byte code, int line) {
+    codes.add(code);
     lines.add(line);
   }
   

@@ -9,7 +9,6 @@ import java.util.Stack;
 import jbLPC.compiler.C_Compilation;
 import jbLPC.compiler.C_Compiler;
 import jbLPC.compiler.C_Function;
-//import jbLPC.compiler.CompilerUpvalue;
 import jbLPC.compiler.C_HasArity;
 import jbLPC.compiler.C_ObjectCompiler;
 import jbLPC.debug.Debugger;
@@ -21,6 +20,8 @@ import jbLPC.nativefn.NativePrint;
 import jbLPC.nativefn.NativePrintLn;
 import jbLPC.util.Prefs;
 import jbLPC.util.SourceFile;
+
+import static jbLPC.compiler.C_OpCode.*;
 
 public class VM {
   //InterpretResult
@@ -84,8 +85,8 @@ public class VM {
     RunFrame frame = fStack.peek(); //cached copy of current RunFrame
       
     //reusable scratchpad vars
-    Byte cOpCode;
-    int offset, argCount;
+    byte code;
+    int index, argCount;
     String key, identifier;
     Object value;
     Closure closure;
@@ -100,11 +101,11 @@ public class VM {
         !vStack.isEmpty() &&
         vStack.peek() instanceof C_Compilation
       ) {
-        C_Compilation c_Compilation = (C_Compilation)vStack.peek();
+        C_Compilation compilation = (C_Compilation)vStack.peek();
         
-        Debugger.instance().printProgress("Executing '" + c_Compilation.name() + "'");
+        Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
         
-    	  frame(c_Compilation);
+    	  frame(compilation);
 
     	  frame = fStack.peek();
     	
@@ -113,19 +114,14 @@ public class VM {
     	  continue;
       }
 
-      cOpCode = frame.next();
-      
-      if (cOpCode == null) {
-    	  runtimeError("Unexpected end of instructions in current frame.");
-    	  
-        return InterpretResult.INTERPRET_RUNTIME_ERROR;
-      }
+      code = frame.next();
 
-      Debugger.instance().traceExecution(instr, globals, vStack);
+      Debugger.instance().traceExecution(frame, globals, vStack);
       
-      switch (cOpCode) {
-        case OP_CONST:
-          value = instr.operands()[0];
+      switch (code) {
+        case OP_CONSTANT:
+          index = frame.next();
+          value = frame.compilation().instrList().constants().get(index);
 
           vStack.push(value);
 
@@ -140,22 +136,23 @@ public class VM {
         case OP_POP: vStack.pop(); break;
         
         case OP_GET_LOCAL:
-          offset = (int)instr.operands()[0];
-          value = vStack.get(frame.base() + offset);
+          index = frame.next();
+          value = vStack.get(frame.base() + index);
 
           vStack.push(value);
 
           break;
         
         case OP_SET_LOCAL:
-          offset = (int)instr.operands()[0];
+          index = frame.next();
           value = vStack.peek();
 
-          vStack.set(frame.base() + offset, value);
+          vStack.set(frame.base() + index, value);
 
           break;
         
-        case OP_GLOBAL:
+        case OP_DEF_GLOBAL:
+          index = frame.next();
           key = (String)instr.operands()[0];
           value = vStack.peek();
 
@@ -512,14 +509,14 @@ public class VM {
             break;
           
           case OP_JUMP:
-            offset = (int)instr.operands()[0];
+            index = (int)instr.operands()[0];
 
 //            frame.setIP(frame.ip() + offset);
 
             break;
           
           case OP_JUMP_IF_FALSE:
-            offset = (int)instr.operands()[0];
+            index = (int)instr.operands()[0];
             value = vStack.peek();
 
 //            if (isFalsey(value))
@@ -528,7 +525,7 @@ public class VM {
             break;
           
           case OP_LOOP:
-            offset = (int)instr.operands()[0];
+            index = (int)instr.operands()[0];
 
 //            frame.setIP(frame.ip() - offset);
 

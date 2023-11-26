@@ -1,14 +1,50 @@
 package jbLPC.debug;
 
-import java.util.ArrayList;
+import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_CALL;
+import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
+import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
+import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_EQUAL;
+import static jbLPC.compiler.C_OpCode.OP_FALSE;
+import static jbLPC.compiler.C_OpCode.OP_FIELD;
+import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
+import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
+import static jbLPC.compiler.C_OpCode.OP_GET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_GREATER;
+import static jbLPC.compiler.C_OpCode.OP_INHERIT;
+import static jbLPC.compiler.C_OpCode.OP_INVOKE;
+import static jbLPC.compiler.C_OpCode.OP_JUMP;
+import static jbLPC.compiler.C_OpCode.OP_JUMP_IF_FALSE;
+import static jbLPC.compiler.C_OpCode.OP_LESS;
+import static jbLPC.compiler.C_OpCode.OP_LOOP;
+import static jbLPC.compiler.C_OpCode.OP_METHOD;
+import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
+import static jbLPC.compiler.C_OpCode.OP_NEGATE;
+import static jbLPC.compiler.C_OpCode.OP_NIL;
+import static jbLPC.compiler.C_OpCode.OP_NOT;
+import static jbLPC.compiler.C_OpCode.OP_OBJECT;
+import static jbLPC.compiler.C_OpCode.OP_POP;
+import static jbLPC.compiler.C_OpCode.OP_RETURN;
+import static jbLPC.compiler.C_OpCode.OP_SET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
+import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
+import static jbLPC.compiler.C_OpCode.OP_SUPER_INVOKE;
+import static jbLPC.compiler.C_OpCode.OP_TRUE;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
+import jbLPC.compiler.C_Compilation;
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.C_InstrList;
-import jbLPC.compiler.C_Compilation;
-import jbLPC.compiler.C_OpCode;
 import jbLPC.compiler.C_Scope;
 import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Prefs;
@@ -67,31 +103,31 @@ public class Debugger {
 	
 	  C_Compilation compilation = scope.compilation();
 	  C_InstrList instrList = compilation.instrList();
-	  List<Byte> instructions = instrList.instructions();
+	  List<Byte> codes = instrList.codes();
 
     printBanner(compilation.toString());
 
     //codes
     if (Prefs.instance().getBoolean("codes")) {
       System.out.print("Codes: ");
-      System.out.print(COLOR_MAGENTA);;
-      System.out.print(prettyList(instructions));
+      System.out.print(COLOR_MAGENTA);
+      System.out.print(codes);
       System.out.println(COLOR_RESET);
     }
 
     //locals
     if (Prefs.instance().getBoolean("locals")) {
       System.out.print("Locals: ");
-      System.out.println(prettyList(scope.locals()));
+      System.out.println(scope.locals());
     }
 
-    //upvalues
-    if (Prefs.instance().getBoolean("upvals")) {
-      System.out.println("Upvalues: ");
-      System.out.println(prettyList(scope.upvalues()));
-    }
+//    //upvalues
+//    if (Prefs.instance().getBoolean("upvals")) {
+//      System.out.println("Upvalues: ");
+//      System.out.println(scope.upvalues());
+//    }
 
-    for (int index = 0; index < instructions.size();)
+    for (int index = 0; index < codes.size();)
       index = disassembleInstruction(instrList, index);
   }
 
@@ -106,12 +142,10 @@ public class Debugger {
       System.out.print(Debugger.COLOR_CYAN);
       System.out.print("Globals: ");
       System.out.print(
-    	prettyList(
-          globals.entrySet()
-            .stream()
-            .filter(item -> !(item.getValue() instanceof NativeFn))
-            .toArray()
-        )
+        globals.entrySet()
+          .stream()
+          .filter(item -> !(item.getValue() instanceof NativeFn))
+          .toArray()
       );
       System.out.print(Debugger.COLOR_RESET);
       System.out.print("\n");
@@ -120,7 +154,7 @@ public class Debugger {
     //vStack
     if (Prefs.instance().getBoolean("stack")) {
       System.out.print(Debugger.COLOR_GREEN + "Stack: ");
-      System.out.print(prettyList(vStack));
+      System.out.print(vStack);
       System.out.print(Debugger.COLOR_RESET);
       System.out.print("\n");
     }
@@ -131,14 +165,10 @@ public class Debugger {
 
   //disassembleInstruction(C_InstrList, int)
   public int disassembleInstruction(C_InstrList instrList, int index) {
-    byte opCode = instrList.instructions().get(index);
+    byte instruction = getInstr(instrList, index);
 
-    //offset
     System.out.print(String.format("%04d", index));
-	    
-    System.out.print(COLOR_YELLOW);
 
-    //Line number
     if (
       (index > 0) &&
       (instrList.lines().get(index) == instrList.lines().get(index - 1))
@@ -147,144 +177,188 @@ public class Debugger {
     else
       System.out.print(String.format("%4d ", instrList.lines().get(index)));
 
-    //rawcode
-    if (Prefs.instance().getBoolean("rawcode")) {
-      System.out.print("(");
-      System.out.print(COLOR_MAGENTA);
-      System.out.print(String.format("0x%02X", opCode));
-      System.out.print(COLOR_YELLOW);
-      System.out.print(") ");
-    }
+    if (Prefs.instance().getBoolean("opcode"))
+      System.out.print("(" + String.format("0x%02X", instruction) + ") ");
 
-    printOpCode(opCode);
-
-    switch (opCode.type()) {
-      case TYPE_CLOSURE:
-        closureInstruction(instrList); break;
-      case TYPE_CONST:
-        constantInstruction(instrList); break;
-      case TYPE_INVOKE:
-          invokeInstruction(instrList); break;
-      case TYPE_JUMP:
-          jumpInstruction(instrList, 1); break;
-      case TYPE_OPERAND:
-        operandInstruction(instrList); break;
-      case TYPE_SIMPLE:
-          simpleInstruction(instrList); break;
+    switch (instruction) {
+      case OP_CONSTANT:
+        index = constantInstruction("OP_CONSTANT", instrList, index); break;
+      case OP_NIL:
+        index = simpleInstruction("OP_NIL", index); break;
+      case OP_TRUE:
+        index = simpleInstruction("OP_TRUE", index); break;
+      case OP_FALSE:
+        index = simpleInstruction("OP_FALSE", index); break;
+      case OP_POP:
+        index = simpleInstruction("OP_POP", index); break;
+      case OP_GET_LOCAL:
+        index = operandInstruction("OP_GET_LOCAL", instrList, index); break;
+      case OP_SET_LOCAL:
+        index = operandInstruction("OP_SET_LOCAL", instrList, index); break;
+      case OP_DEF_GLOBAL:
+        index = constantInstruction("OP_DEF_GLOBAL", instrList, index); break;
+      case OP_GET_GLOBAL:
+        index = constantInstruction("OP_GET_GLOBAL", instrList, index); break;
+      case OP_SET_GLOBAL:
+        index = constantInstruction("OP_SET_GLOBAL", instrList, index); break;
+      case OP_GET_UPVAL:
+        index = operandInstruction("OP_GET_UPVAL", instrList, index); break;
+      case OP_SET_UPVAL:
+        index = operandInstruction("OP_SET_UPVAL", instrList, index); break;
+      case OP_GET_PROP:
+        index = constantInstruction("OP_GET_PROPERTY", instrList, index); break;
+      case OP_SET_PROP:
+        index = constantInstruction("OP_SET_PROPERTY", instrList, index); break;
+      case OP_GET_SUPER:
+        index = constantInstruction("OP_GET_SUPER", instrList, index); break;
+      case OP_EQUAL:
+        index = simpleInstruction("OP_EQUAL", index); break;
+      case OP_GREATER:
+        index = simpleInstruction("OP_GREATER", index); break;
+      case OP_LESS:
+        index = simpleInstruction("OP_LESS", index); break;
+      case OP_ADD:
+        index = simpleInstruction("OP_ADD", index); break;
+      case OP_SUBTRACT:
+        index = simpleInstruction("OP_SUBTRACT", index); break;
+      case OP_MULTIPLY:
+        index = simpleInstruction("OP_MULTIPLY", index); break;
+      case OP_DIVIDE:
+        index = simpleInstruction("OP_DIVIDE", index); break;
+      case OP_NOT:
+        index = simpleInstruction("OP_NOT", index); break;
+      case OP_NEGATE:
+        index = simpleInstruction("OP_NEGATE", index); break;
+      case OP_JUMP:
+        index = jumpInstruction("OP_JUMP", 1, instrList, index); break;
+      case OP_JUMP_IF_FALSE:
+        index = jumpInstruction("OP_JUMP_IF_FALSE", 1, instrList, index); break;
+      case OP_LOOP:
+        index = jumpInstruction("OP_LOOP", -1, instrList, index); break;
+      case OP_CALL:
+        index = operandInstruction("OP_CALL", instrList, index); break;
+      case OP_INVOKE:
+        index = invokeInstruction("OP_INVOKE", instrList, index); break;
+      case OP_SUPER_INVOKE:
+        index = invokeInstruction("OP_SUPER_INVOKE", instrList, index); break;
+      case OP_CLOSURE:
+        index = closureInstruction("OP_CLOSURE", instrList, index); break;
+      case OP_CLOSE_UPVAL:
+        index = simpleInstruction("OP_CLOSE_UPVAL", index); break;
+      case OP_RETURN:
+        index = simpleInstruction("OP_RETURN", index); break;
+      case OP_INHERIT:
+        index = simpleInstruction("OP_INHERIT", index); break;
+      case OP_OBJECT:
+        index = constantInstruction("OP_OBJECT", instrList, index); break;
+      case OP_FIELD:
+        index = constantInstruction("OP_FIELD", instrList, index); break;
+      case OP_METHOD:
+        index = constantInstruction("OP_METHOD", instrList, index); break;
       default:
-        System.out.print("Unknown opcode: ");
-          printOpCode(opCode, true);
+        System.out.println("Unknown opcode: " + instruction);
+
+        index = index + 1;
         
         break;
     }
     
-	System.out.print(COLOR_RESET);
+    System.out.println(COLOR_RESET);
+    
+    return index;
   }
 
-  //closureInstruction(C_OpCode)
-  private void closureInstruction(C_OpCode cOpCode) {
-	  C_Function function = (C_Function)instr.operands()[0];
+  //closureInstruction(String, C_InstrList, int)
+  private int closureInstruction(String name, C_InstrList instrList, int index) {
+    byte operand = getInstr(instrList, index);
+    C_Function function = (C_Function)getConstant(instrList, operand);
+
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
 
     System.out.println(function);
 
+    index += 3;
+
 //    for (int j = 0; j < function.upvalueCount(); j++) {
-//      boolean isLocal = (getCode(chunk, offset++) != 0);
-//      Integer index = getCode(chunk, offset++);
+//      boolean isLocal = (getInstr(instrList, index++) != 0);
+//      byte code = getInstr(instrList, index++);
 //
 //      System.out.print(String.format(
 //        "%04d      |                     %s %d\n",
-//        offset - 2, isLocal ? "local" : "upvalue", index
+//        index - 2, isLocal ? "local" : "upvalue", code
 //      ));
 //    }
+
+    return index;
   }
 
-  //constantInstruction(C_OpCode)
-  private void constantInstruction(C_OpCode cOpCode) {
-    Object constant = instr.operands()[0];
+  //constantInstruction(String, C_InstrList, int)
+  private int constantInstruction(String name, C_InstrList instrList, int index) {
+    byte operand = getInstr(instrList, index + 1);
+    Object constant = getConstant(instrList, operand);
 
-    System.out.print(COLOR_MAGENTA);
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
+
     if (constant instanceof String)
-      System.out.println("\"" + constant + "\"");
+      System.out.print("(\"" + constant + "\")\n");
     else
-      System.out.println(constant);
-    System.out.print(COLOR_YELLOW);
+      System.out.print("(" + constant + ")\n");
+
+    return index + 3;
   }
 
-  //invokeInstruction(C_OpCode)
-  private void invokeInstruction(C_OpCode cOpCode) {
-    String identifier = (String)instr.operands()[0]; //method name
-    int argCount = (int)instr.operands()[1];
+  //invokeInstruction(String, C_InstrList, int)
+  private int invokeInstruction(String name, C_InstrList instrList, int index) {
+    byte operand = getInstr(instrList, index + 1);
+    byte argCount = getInstr(instrList, index + 3);
+    Object constant = getConstant(instrList, operand);
 
-    System.out.print("(\"" + identifier + "\")");
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
 
-    System.out.println(String.format(" (%d args)\n", argCount));
+    if (constant instanceof String)
+      System.out.print("(\"" + constant + "\")");
+    else
+      System.out.print("(" + constant + ")");
+
+    System.out.print(String.format(" (%d args)\n", argCount));
+
+    return index + 4;
   }
 
-  //jumpInstruction(C_OpCode, int)
-  private void jumpInstruction(C_OpCode cOpCode, int sign) {
-//	int offset = (int)instr.operands()[0];
+  //simpleInstruction(String, int)
+  private int simpleInstruction(String name, int index) {
+    System.out.println(String.format("%-16s", name));
 
-    System.out.println("TODO: finish jumpInstruction in Debugger class!");
-//    System.out.print(String.format("%-16s %4d -> %d\n",
-//      instr.opCode(), offset, offset + 3 + (sign * operand)));
+    return index + 1;
+  }
+
+  //operandInstruction(String, C_InstrList, int)
+  private int operandInstruction(String name, C_InstrList instrList, int index) {
+    byte operand = getInstr(instrList, index + 1);
+
+    System.out.print(String.format("%-16s %d ", name, operand));
+    System.out.print("\n");
+
+    return index + 2;
+  }
+
+  //jumpInstruction(String, int, C_InstrList, int)
+  private int jumpInstruction(String name, int sign, C_InstrList instrList, int index) {
+    byte operand = getInstr(instrList, index);
+
+    System.out.print(String.format("%-16s %4d -> %d\n",
+      name, index, index + 3 + (sign * operand)));
+
+    return index + 3;
+  }
+
+  //getCode(C_InstrList, int)
+  private byte getInstr(C_InstrList instrList, int index) {
+    return instrList.codes().get(index);
   }
   
-  //operandInstruction(C_OpCode)
-  private void operandInstruction(C_OpCode cOpCode) {
-    System.out.println("TODO: finish operandInstruction in Debugger class!");
-  }
-
-  //simpleInstruction(C_OpCode)
-  private void simpleInstruction(C_OpCode cOpCode) {
-   System.out.println("");
-  }
-  
-  //printOpCode(C_OpCode)
-  private void printOpCode(C_OpCode opCode) {
-    printOpCode(opCode, false);
-  }
-  
-  //printOpCode(C_OpCode, boolean)
-  private void printOpCode(C_OpCode opCode, boolean EOL) {
-    System.out.print(String.format("%-16s ", opCode));
-    
-    if (EOL) System.out.print("\n");
-  }
-  
-  //prettyList(Stack)
-  @SuppressWarnings("rawtypes")
-  private String prettyList(Stack items) {
-    return prettyList(items.toArray());
-  }
-
-  //prettyList(List)
-  @SuppressWarnings("rawtypes")
-  private String prettyList(List items) {
-	  return prettyList(items.toArray());
-  }
-  
-  //prettyList(Object[])
-  private String prettyList(Object[] items) {
-	  StringBuilder sb = new StringBuilder();
-	  
-	  sb.append("[ ");
-
-	  for (int i = 0; i < items.length; i++) {
-	    Object item = items[i];
-	    
-	    if (item instanceof String)
-	      sb.append("\"" + item + "\"");
-	    else if (item == null)
-	      sb.append("nil");
-	    else
-	      sb.append(item);
-	    
-        if (i < items.length - 1)
-          sb.append(", ");
-	  }
-	  
-	  sb.append(" ]");
-	  
-	  return sb.toString();
+  //getConstant(C_InstrList, int)
+  private Object getConstant(C_InstrList instrList, int index) {
+    return instrList.constants().get(index);
   }
 }

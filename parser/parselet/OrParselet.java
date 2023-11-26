@@ -16,7 +16,7 @@ public class OrParselet implements Parselet {
 
     compiler.patchJump(elseJump);
     
-    compiler.emitInstruction(OP_POP);
+    compiler.emitCode(OP_POP);
 
     parser.parsePrecedence(PREC_OR);
     

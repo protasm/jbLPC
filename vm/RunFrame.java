@@ -14,7 +14,7 @@ public class RunFrame implements ListIterator<Byte> {
     this.compilation = compilation;
     this.base = base;
 
-    iterator = compilation.instrList().instructions().listIterator();
+    iterator = compilation.instrList().codes().listIterator();
   }
 
   //compilation()

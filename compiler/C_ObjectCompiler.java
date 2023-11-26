@@ -56,8 +56,8 @@ public class C_ObjectCompiler extends C_Compiler {
 
     int index = emitConstant(prefix);
 
-    emitInstruction(OP_OBJECT);
-    emitInstruction(index);
+    emitCode(OP_OBJECT);
+    emitCode(index);
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -74,7 +74,7 @@ public class C_ObjectCompiler extends C_Compiler {
       return null;
 
     //end compilation
-    emitInstruction(OP_RETURN);
+    emitCode(OP_RETURN);
 
     Debugger.instance().disassembleScope(currScope);
 
@@ -93,12 +93,12 @@ public class C_ObjectCompiler extends C_Compiler {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      emitInstruction(OP_NIL);
+      emitCode(OP_NIL);
 
     defineVariable(index);
 
-    emitInstruction(OP_FIELD);
-    emitInstruction(index);
+    emitCode(OP_FIELD);
+    emitCode(index);
 
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
@@ -139,10 +139,10 @@ public class C_ObjectCompiler extends C_Compiler {
 
 //    namedVariable(classToken, false);
       
-    emitInstruction(OP_COMPILE);
-    emitInstruction(index);
+    emitCode(OP_COMPILE);
+    emitCode(index);
 
-    emitInstruction(OP_INHERIT);
+    emitCode(OP_INHERIT);
 
 //    currentClass.setHasSuperclass(true);
   }
@@ -173,8 +173,8 @@ public class C_ObjectCompiler extends C_Compiler {
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      emitInstruction(setOp);
-      emitInstruction(index);
+      emitCode(setOp);
+      emitCode(index);
     } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
       compoundAssignment(getOp, setOp, OP_SUBTRACT, index);
     else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
@@ -184,8 +184,8 @@ public class C_ObjectCompiler extends C_Compiler {
     else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
       compoundAssignment(getOp, setOp, OP_MULTIPLY, index);
     else { //retrieval
-      emitInstruction(getOp);
-      emitInstruction(index);
+      emitCode(getOp);
+      emitCode(index);
     }
   }
 

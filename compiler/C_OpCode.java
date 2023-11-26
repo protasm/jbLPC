@@ -3,10 +3,10 @@ package jbLPC.compiler;
 public final class C_OpCode {
   public static final byte OP_ADD           = 0x00; //simple
   public static final byte OP_CALL          = 0x01; //operand (arg count)
-  public static final byte OP_CLOSE_UPVALUE = 0x02; //simple
+  public static final byte OP_CLOSE_UPVAL   = 0x02; //simple
   public static final byte OP_CLOSURE       = 0x03; //closure
   public static final byte OP_COMPILE       = 0x04; //const (object path)
-  public static final byte OP_CONST         = 0x05; //const (constant)
+  public static final byte OP_CONSTANT      = 0x05; //const (constant)
   public static final byte OP_DIVIDE        = 0x06; //simple
   public static final byte OP_EQUAL         = 0x07; //simple
   public static final byte OP_FALSE         = 0x08; //simple
@@ -15,8 +15,8 @@ public final class C_OpCode {
   public static final byte OP_GET_LOCAL     = 0x0B; //operand (stack offset)
   public static final byte OP_GET_PROP      = 0x0C; //const (prop name)
   public static final byte OP_GET_SUPER     = 0x0D; //const
-  public static final byte OP_GET_UPVALUE   = 0x0E; //operand
-  public static final byte OP_GLOBAL        = 0x0F; //simple
+  public static final byte OP_GET_UPVAL     = 0x0E; //operand
+  public static final byte OP_DEF_GLOBAL    = 0x0F; //simple
   public static final byte OP_GREATER       = 0x10; //simple
   public static final byte OP_INHERIT       = 0x11; //simple
   public static final byte OP_INVOKE        = 0x12; //invoke
@@ -35,22 +35,11 @@ public final class C_OpCode {
   public static final byte OP_SET_GLOBAL    = 0x1F; //const (global name)
   public static final byte OP_SET_LOCAL     = 0x20; //operand (stack offset)
   public static final byte OP_SET_PROP      = 0x21; //const (prop name)
-  public static final byte OP_SET_UPVALUE   = 0x22; //operand
+  public static final byte OP_SET_UPVAL     = 0x22; //operand
   public static final byte OP_SUBTRACT      = 0x23; //simple
   public static final byte OP_SUPER_INVOKE  = 0x24; //invoke
   public static final byte OP_TRUE          = 0x25; //simple
 
-  //OpCode()
-  private OpCode() {}
+  //C_OpCode()
+  private C_OpCode() {}
 }
-
-/*
-  public static enum C_OpCodeType {
-	  TYPE_CLOSURE,
-	  TYPE_CONST,
-	  TYPE_INVOKE,
-	  TYPE_JUMP,
-	  TYPE_OPERAND,
-	  TYPE_SIMPLE,
-  }
-*/

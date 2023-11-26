@@ -19,11 +19,11 @@ public class UnaryParselet implements Parselet {
     // Emit the operator instruction.
     switch (operatorType) {
       case TOKEN_BANG:
-        compiler.emitInstruction(OP_NOT);
+        compiler.emitCode(OP_NOT);
 
         break;
       case TOKEN_MINUS:
-        compiler.emitInstruction(OP_NEGATE);
+        compiler.emitCode(OP_NEGATE);
 
         break;
       default: //Unreachable

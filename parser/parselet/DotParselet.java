@@ -7,7 +7,6 @@ import static jbLPC.scanner.TokenType.TOKEN_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 
-import jbLPC.compiler.Instruction;
 import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
@@ -16,23 +15,22 @@ public class DotParselet implements Parselet {
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     parser.consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
 
-    int index = compiler.identifierConstant(parser.previous());
-    Instruction instr;
+    int index = compiler.emitConstant(parser.previous().lexeme());
 
     if (canAssign && parser.match(TOKEN_EQUAL)) {
       compiler.expression();
       
-      instr = new Instruction(OP_SET_PROP, index);
+      compiler.emitCode(OP_SET_PROP);
+      compiler.emitCode(index);
     } else if (parser.match(TOKEN_LEFT_PAREN)) {
-      Integer argCount = compiler.argumentList();
+      int argCount = compiler.argumentList();
 
-      instr = new Instruction(
-        OP_INVOKE,
-        new Object[] { index, argCount }
-      );
-    } else
-      instr = new Instruction(OP_GET_PROP, index);
-    
-    compiler.emitInstruction(instr);
+      compiler.emitCode(OP_INVOKE);
+      compiler.emitCode(index);
+      compiler.emitCode(argCount);
+    } else {
+      compiler.emitCode(OP_GET_PROP);
+      compiler.emitCode(index);
+    }
   }
 }

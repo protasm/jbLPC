@@ -7,7 +7,7 @@ import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.C_OpCode.OP_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_JUMP;
 import static jbLPC.compiler.C_OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_LOOP;
@@ -91,8 +91,8 @@ public class C_Compiler {
     if (parser.hadError())
       return null;
       
-    currInstrList().addInstr(OP_NIL); //return value; always null for a Script
-    currInstrList().addInstr(OP_RETURN);
+    emitCode(OP_NIL); //return value; always null for a Script
+    emitCode(OP_RETURN);
 
     Debugger.instance().disassembleScope(currScope);
     
@@ -130,15 +130,15 @@ public class C_Compiler {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      currInstrList().addInstr(OP_NIL);
+      emitCode(OP_NIL);
 
     if (currScope.depth() > 0)
       defineLocal(); //mark local available
     else if (currScope.compilation().type() == TYPE_SCRIPT) {
       int index = currInstrList().addConstant(token.lexeme());
       
-      currInstrList().addInstr(OP_GLOBAL);
-      currInstrList().addInstr((byte)index);
+      emitCode(OP_DEF_GLOBAL);
+      emitCode(index);
     }
 
     //handle variable declarations of the form:
@@ -255,35 +255,30 @@ public class C_Compiler {
     parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
   }
 
-  //compoundAssignment(OpCode, OpCode, OpCode, int index)
-  protected void compoundAssignment(C_OpCode getOp, C_OpCode setOp, C_OpCode assignOp, int index) {
-    currInstrList().addInstr(getOp);
-    currInstrList().addInstr((byte)index);
+  //compoundAssignment(byte, byte, byte, int index)
+  protected void compoundAssignment(byte getOp, byte setOp, byte assignOp, int index) {
+    emitCode(getOp);
+    emitCode(index);
 
     expression();
 
-    currInstrList().addInstr(assignOp);
+    emitCode(assignOp);
 
-    currInstrList().addInstr(setOp);
-    currInstrList().addInstr((byte)index);
+    emitCode(setOp);
+    emitCode(index);
   }
 
-  //emitInstruction(int)
-  public void emitInstruction(int code) {
-    emitInstruction((byte) code);
+  //emitCode(int)
+  public void emitCode(int code) {
+    emitCode((byte) code);
   }
 
-  //emitInstruction(OpCode)
-  public void emitInstruction(C_OpCode c_OpCode) {
-    emitInstruction(c_OpCode.code());
-  }
-
-  //emitInstruction(byte code)
-  public void emitInstruction(byte code) {
+  //emitCode(byte code)
+  public void emitCode(byte code) {
     if (parser.previous() == null) //may be null for "synthetic" operations
-      currInstrList().addInstr(code);
+      currInstrList().addCode(code);
     else
-      currInstrList().addInstr(code, parser.previous().line());
+      currInstrList().addCode(code, parser.previous().line());
   }
   
   //emitConstant(Object)
@@ -291,26 +286,26 @@ public class C_Compiler {
     return currInstrList().addConstant(constant);
   }
 
-  //emitJump(OpCode)
-  public int emitJump(C_OpCode c_OpCode) {
-    emitInstruction(c_OpCode);
-    emitInstruction((byte)0xFF); //placeholder, later backpatched
+  //emitJump(byte)
+  public int emitJump(byte code) {
+    emitCode(code);
+    emitCode(0xFF); //placeholder, later backpatched
 
-    return currInstrList().instructions().size() - 1;
+    return currInstrList().codes().size() - 1;
   }
 
   //emitLoop(int)
   private void emitLoop(int loopStart) {
-    int offset = currInstrList().instructions().size() - loopStart + 2;
+    int offset = currInstrList().codes().size() - loopStart + 2;
 
-    emitInstruction(OP_LOOP);
-    emitInstruction(offset);
+    emitCode(OP_LOOP);
+    emitCode(offset);
   }
 
   //endFunction()
   private C_Function endFunction() {
-    emitInstruction(OP_NIL); //return value?
-    emitInstruction(OP_RETURN);
+    emitCode(OP_NIL); //return value?
+    emitCode(OP_RETURN);
 
     //Extract assembled function from temporary structure.
     C_Function function = (C_Function)currScope.compilation();
@@ -335,9 +330,9 @@ public class C_Compiler {
       currScope.locals().peek().depth() > currScope.depth()
     ) {
       if (currScope.locals().get(currScope.locals().size() - 1).isCaptured())
-          emitInstruction(OP_CLOSE_UPVAL);
+          emitCode(OP_CLOSE_UPVAL);
       else
-        emitInstruction(OP_POP);
+        emitCode(OP_POP);
 
       currScope.locals().pop();
     }
@@ -349,7 +344,7 @@ public class C_Compiler {
 
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
 
-    emitInstruction(OP_POP);
+    emitCode(OP_POP);
   }
 
   //forStatement()
@@ -366,7 +361,7 @@ public class C_Compiler {
     else
       expressionStatement();
 
-    int loopStart = currInstrList().instructions().size();
+    int loopStart = currInstrList().codes().size();
 
      //Condition clause.
     int exitJump = -1;
@@ -379,17 +374,17 @@ public class C_Compiler {
       // Jump out of the loop if the condition is false.
       exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-      emitInstruction(OP_POP); // Condition.
+      emitCode(OP_POP); // Condition.
     }
 
     //Increment clause.
     if (!parser.match(TOKEN_RIGHT_PAREN)) {
       int bodyJump = emitJump(OP_JUMP);
-      int incrementStart = currInstrList().instructions().size();
+      int incrementStart = currInstrList().codes().size();
 
       expression();
 
-      emitInstruction(OP_POP);
+      emitCode(OP_POP);
 
       parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
 
@@ -407,7 +402,7 @@ public class C_Compiler {
     if (exitJump != -1) {
       patchJump(exitJump);
 
-      emitInstruction(OP_POP); // Condition.
+      emitCode(OP_POP); // Condition.
     }
 
     endScope();
@@ -461,8 +456,8 @@ public class C_Compiler {
     //TODO: fix
     int index = emitConstant(new Object[] { function, c_Scope.upvalues() });
 
-    emitInstruction(OP_CLOSURE);
-    emitInstruction(index);
+    emitCode(OP_CLOSURE);
+    emitCode(index);
 
     //No endScope() needed because Scope is ended completely
     //at the end of the function body.
@@ -483,7 +478,7 @@ public class C_Compiler {
 
     int thenJump = emitJump(OP_JUMP_IF_FALSE);
 
-    emitInstruction(OP_POP);
+    emitCode(OP_POP);
 
     statement();
 
@@ -491,7 +486,7 @@ public class C_Compiler {
 
     patchJump(thenJump);
 
-    emitInstruction(OP_POP);
+    emitCode(OP_POP);
 
     if (parser.match(TOKEN_ELSE)) statement();
 
@@ -501,7 +496,7 @@ public class C_Compiler {
   //namedVariable(Token, boolean)
   //generates code to load a variable with the given name onto the vStack.
   public void namedVariable(Token token, boolean canAssign) {
-    C_OpCode getOp, setOp;
+    byte getOp, setOp;
     
     int index = resolveLocal(currScope, token);
 
@@ -521,8 +516,8 @@ public class C_Compiler {
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      emitInstruction(setOp);
-      emitInstruction(index);
+      emitCode(setOp);
+      emitCode(index);
     } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
       compoundAssignment(getOp, setOp, OP_SUBTRACT, index);
     else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
@@ -532,17 +527,17 @@ public class C_Compiler {
     else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
       compoundAssignment(getOp, setOp, OP_MULTIPLY, index);
     else { //retrieval
-      emitInstruction(getOp);
-      emitInstruction(index);
+      emitCode(getOp);
+      emitCode(index);
     }
   }
 
   //patchJump(int)
   public void patchJump(int offset) {
     // -1 to adjust for the jump offset itself.
-    int jump = currInstrList().instructions().size() - offset - 1;
+    int jump = currInstrList().codes().size() - offset - 1;
 
-    currInstrList().instructions().set(offset, (byte)jump);
+    currInstrList().codes().set(offset, (byte)jump);
   }
 
   //resolveLocal(Scope, Token)
@@ -594,14 +589,14 @@ public class C_Compiler {
       parser.error("Can't return from top-level code.");
 
     if (parser.match(TOKEN_SEMICOLON)) //no return value provided
-      emitInstruction(OP_NIL);
+      emitCode(OP_NIL);
     else { //handle return value
       expression();
 
       parser.consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
     }
 
-    emitInstruction(OP_RETURN);
+    emitCode(OP_RETURN);
   }
 
   //statement()
@@ -631,7 +626,7 @@ public class C_Compiler {
 
   //whileStatement()
   private void whileStatement() {
-    int loopStart = currInstrList().instructions().size();
+    int loopStart = currInstrList().codes().size();
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
 
@@ -641,7 +636,7 @@ public class C_Compiler {
 
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-    emitInstruction(OP_POP);
+    emitCode(OP_POP);
 
     statement();
 
@@ -649,6 +644,6 @@ public class C_Compiler {
 
     patchJump(exitJump);
 
-    emitInstruction(OP_POP);
+    emitCode(OP_POP);
   }
 }
