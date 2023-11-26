@@ -1,5 +1,45 @@
 package jbLPC.vm;
 
+import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_SCRIPT;
+import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_CALL;
+import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
+import static jbLPC.compiler.C_OpCode.OP_COMPILE;
+import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
+import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_EQUAL;
+import static jbLPC.compiler.C_OpCode.OP_FALSE;
+import static jbLPC.compiler.C_OpCode.OP_FIELD;
+import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
+import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
+import static jbLPC.compiler.C_OpCode.OP_GET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_GREATER;
+import static jbLPC.compiler.C_OpCode.OP_INHERIT;
+import static jbLPC.compiler.C_OpCode.OP_INVOKE;
+import static jbLPC.compiler.C_OpCode.OP_JUMP;
+import static jbLPC.compiler.C_OpCode.OP_JUMP_IF_FALSE;
+import static jbLPC.compiler.C_OpCode.OP_LESS;
+import static jbLPC.compiler.C_OpCode.OP_LOOP;
+import static jbLPC.compiler.C_OpCode.OP_METHOD;
+import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
+import static jbLPC.compiler.C_OpCode.OP_NEGATE;
+import static jbLPC.compiler.C_OpCode.OP_NIL;
+import static jbLPC.compiler.C_OpCode.OP_NOT;
+import static jbLPC.compiler.C_OpCode.OP_OBJECT;
+import static jbLPC.compiler.C_OpCode.OP_POP;
+import static jbLPC.compiler.C_OpCode.OP_RETURN;
+import static jbLPC.compiler.C_OpCode.OP_SET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
+import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
+import static jbLPC.compiler.C_OpCode.OP_SUPER_INVOKE;
+import static jbLPC.compiler.C_OpCode.OP_TRUE;
+
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
@@ -10,6 +50,7 @@ import jbLPC.compiler.C_Compilation;
 import jbLPC.compiler.C_Compiler;
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.C_HasArity;
+import jbLPC.compiler.C_InstrList;
 import jbLPC.compiler.C_ObjectCompiler;
 import jbLPC.debug.Debugger;
 import jbLPC.nativefn.NativeClock;
@@ -20,8 +61,6 @@ import jbLPC.nativefn.NativePrint;
 import jbLPC.nativefn.NativePrintLn;
 import jbLPC.util.Prefs;
 import jbLPC.util.SourceFile;
-
-import static jbLPC.compiler.C_OpCode.*;
 
 public class VM {
   //InterpretResult
@@ -64,7 +103,7 @@ public class VM {
   //interpret(String)
   public InterpretResult interpret(String name, String source) {
     C_Compiler compiler = new C_Compiler();
-    C_Compilation cScript = (C_Compilation)compiler.compile(name, source);
+    C_Compilation cScript = compiler.compile(name, source);
 
     if (cScript == null)
       return InterpretResult.INTERPRET_COMPILE_ERROR;
@@ -74,7 +113,7 @@ public class VM {
     vStack.push(cScript);
 
     frame(cScript);
-    
+
     vStack.pop();
 
     return run();
@@ -83,7 +122,7 @@ public class VM {
   //run()
   private InterpretResult run() {
     RunFrame frame = fStack.peek(); //cached copy of current RunFrame
-      
+
     //reusable scratchpad vars
     byte code;
     int index, argCount;
@@ -102,23 +141,81 @@ public class VM {
         vStack.peek() instanceof C_Compilation
       ) {
         C_Compilation compilation = (C_Compilation)vStack.peek();
-        
+
         Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
-        
+
     	  frame(compilation);
 
     	  frame = fStack.peek();
-    	
+
     	  vStack.pop();
-    	  
+
     	  continue;
       }
 
       code = frame.next();
 
       Debugger.instance().traceExecution(frame, globals, vStack);
-      
+
       switch (code) {
+        case OP_ADD:
+          if (twoStringOperands())
+            concatenate();
+          else if (twoNumericOperands())
+            binaryOp(Operation.OPERATION_PLUS);
+          else
+            return errorTwoNumbersOrStrings();
+
+          break;
+
+        case OP_CALL:
+          argCount = frame.next();
+          value = vStack.get(vStack.size() - 1 - argCount); //callee
+
+          if (!callValue(value, argCount))
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+
+          frame = fStack.peek();
+
+          break;
+
+        case OP_CLOSE_UPVAL:
+          //close the upvalue at the top of the vStack
+//          closeUpvalues(vStack.size() - 1);
+
+          vStack.pop();
+
+          break;
+
+        case OP_CLOSURE:
+          index = frame.next();
+          C_Function cFunction = (C_Function)frame.compilation().instrList().constants().get(index);
+//        CompilerUpvalue[] compilerUpvalues = (CompilerUpvalue[])instr.operands()[1];
+          closure = new Closure(cFunction);
+
+          vStack.push(closure);
+
+//        for (int i = 0; i < closure.upvalueCount(); i++) {
+//          boolean isLocal = compilerUpvalues[i].isLocal();
+//          int index = compilerUpvalues[i].index();
+//
+//          if (isLocal)
+//            closure.upvalues()[i] = captureUpvalue(frame.base() + index);
+//          else
+//            closure.upvalues()[i] = frame.closure().upvalues()[index];
+//        }
+
+          break;
+
+        case OP_COMPILE:
+          index = frame.next(); //constants index
+          identifier = (String)frame.compilation().instrList().constants().get(index);
+          C_Compilation c_Compilation = getCompilation(identifier);
+
+          vStack.push(c_Compilation);
+
+          break;
+
         case OP_CONSTANT:
           index = frame.next();
           value = frame.compilation().instrList().constants().get(index);
@@ -126,34 +223,10 @@ public class VM {
           vStack.push(value);
 
           break;
-        
-        case OP_NIL: vStack.push(null); break;
-        
-        case OP_TRUE: vStack.push(true); break;
-        
-        case OP_FALSE: vStack.push(false); break;
-        
-        case OP_POP: vStack.pop(); break;
-        
-        case OP_GET_LOCAL:
-          index = frame.next();
-          value = vStack.get(frame.base() + index);
 
-          vStack.push(value);
-
-          break;
-        
-        case OP_SET_LOCAL:
-          index = frame.next();
-          value = vStack.peek();
-
-          vStack.set(frame.base() + index, value);
-
-          break;
-        
         case OP_DEF_GLOBAL:
           index = frame.next();
-          key = (String)instr.operands()[0];
+          key = (String)frame.compilation().instrList().constants().get(index);
           value = vStack.peek();
 
           globals.put(key, value);
@@ -161,9 +234,37 @@ public class VM {
           vStack.pop();
 
           break;
-        
+
+        case OP_DIVIDE:
+          if (!twoNumericOperands())
+            return errorTwoNumbers();
+
+          binaryOp(Operation.OPERATION_DIVIDE);
+
+          break;
+
+        case OP_EQUAL:
+          equate();
+
+          break;
+
+        case OP_FALSE: vStack.push(false); break;
+
+        case OP_FIELD:
+          index = frame.next();
+          identifier = (String)frame.compilation().instrList().constants().get(index);
+          value = vStack.peek();
+          lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
+
+          lpcObject.fields().put(identifier, value);
+
+          vStack.pop(); // dfFieldValue
+
+          break;
+
         case OP_GET_GLOBAL:
-          key = (String)instr.operands()[0]; //global name
+          index = frame.next();
+          key = (String)frame.compilation().instrList().constants().get(index);
 
           if (!globals.containsKey(key))
             return error("Undefined object '" + key + "'.");
@@ -173,57 +274,108 @@ public class VM {
           vStack.push(value);
 
           break;
-        
-        case OP_SET_GLOBAL:
-          key = (String)instr.operands()[0]; //global name
 
-          if (!globals.containsKey(key))
-            return error("Undefined object '" + key + "'.");
+        case OP_GET_LOCAL:
+          index = frame.next(); //offset from base
+          value = vStack.get(frame.base() + index);
 
-          //Peek here, not pop; assignment is an expression,
-          //so we leave value vStacked in case the assignment
-          //is nested inside a larger expression.
-          globals.put(key, vStack.peek());
-
-          break;
-        
-        case OP_GET_UPVAL:
-//          offset = (int)instr.operands()[0]; //upvalue slot
-//          upvalue = frame.closure().upvalues()[offset];
-//
-//          if (upvalue.location() != -1) //i.e., open
-//            vStack.push(vStack.get(upvalue.location()));
-//          else //i.e., closed
-//           vStack.push(upvalue.closedValue());
-
-          break;
-        
-        case OP_SET_UPVAL:
-//          offset = (int)instr.operands()[0];
-//          upvalue = frame.closure().upvalues()[offset];
-//          value = vStack.peek();
-//
-//          if (upvalue.location() != -1) //i.e., open
-//            vStack.set(upvalue.location(), value);
-//          else //i.e., closed
-//            upvalue.setClosedValue(value);
+          vStack.push(value);
 
           break;
 
-        case OP_CALL:
-          argCount = (int)instr.operands()[0];
-          value = vStack.get(vStack.size() - 1 - argCount); //callee
+        case OP_GET_PROP:
+          value = vStack.peek();
 
-          if (!callValue(value, argCount))
+          if (!(value instanceof LPCObject)) {
+            runtimeError("Only objects have properties.");
+
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
+          }
 
-          frame = fStack.peek();
+          index = frame.next();
+          key = (String)frame.compilation().instrList().constants().get(index);
+          lpcObject = (LPCObject)value;
+
+          //Look first for a matching field.
+          if (lpcObject.fields().containsKey(key)) {
+            Object field = lpcObject.fields().get(key);
+
+            vStack.pop(); // LPCObject
+
+            vStack.push(field);
+
+            break;
+          }
+
+          //If no field, look for a matching method.
+          if (lpcObject.methods().containsKey(key)) {
+            Closure method = lpcObject.methods().get(key);
+
+            vStack.pop(); // LPCObject
+
+            vStack.push(method);
+
+            break;
+          }
+
+          runtimeError("Undefined property '" + key + "'.");
+
+          return InterpretResult.INTERPRET_RUNTIME_ERROR;
+
+        case OP_GET_SUPER:
 
           break;
-        
+
+        case OP_GET_UPVAL:
+//        offset = (int)instr.operands()[0]; //upvalue slot
+//        upvalue = frame.closure().upvalues()[offset];
+//
+//        if (upvalue.location() != -1) //i.e., open
+//          vStack.push(vStack.get(upvalue.location()));
+//        else //i.e., closed
+//         vStack.push(upvalue.closedValue());
+
+          break;
+
+        case OP_GREATER:
+          if (!twoNumericOperands())
+            return errorTwoNumbers();
+
+          binaryOp(Operation.OPERATION_GT);
+
+          break;
+
+        case OP_INHERIT:
+          value = vStack.peek();
+
+          if (!(value instanceof LPCObject)) {
+            runtimeError("Inherited object must be an LPCObject.");
+
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+          }
+
+          lpcObject = (LPCObject)value; //super object
+
+          value = vStack.get(vStack.size() - 2);
+
+          if (!(value instanceof LPCObject)) {
+            runtimeError("Inheriting object must be an LPCObject.");
+
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+          }
+
+          LPCObject iSubObject = (LPCObject)value;
+
+          iSubObject.inherit(lpcObject); //copies down fields and methods
+
+          vStack.pop(); // Inheriting object.
+
+          break;
+
         case OP_INVOKE:
-          identifier = (String)instr.operands()[0]; //method name
-          argCount = (int)instr.operands()[1];
+          index = frame.next();
+          argCount = frame.next();
+          identifier = (String)frame.compilation().instrList().constants().get(index);
 
           if (!invoke(identifier, argCount))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -231,46 +383,88 @@ public class VM {
           frame = fStack.peek();
 
           break;
-        
-        case OP_SUPER_INVOKE:
-          identifier = (String)instr.operands()[0]; //method name
-          argCount = (int)instr.operands()[0];
-          lpcObject = (LPCObject)vStack.pop(); //super object
 
-          if (!invokeFromObject(lpcObject, identifier, argCount))
-            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        case OP_JUMP:
+          index = frame.next();
 
-          frame = fStack.peek();
+//          frame.setIP(frame.ip() + offset);
 
           break;
-        
-        case OP_CLOSURE:
-          C_Function cFunction = (C_Function)instr.operands()[0];
-//          CompilerUpvalue[] compilerUpvalues = (CompilerUpvalue[])instr.operands()[1];
-          closure = new Closure(cFunction);
 
-          vStack.push(closure);
+        case OP_JUMP_IF_FALSE:
+          index = frame.next();
+          value = vStack.peek();
 
-//          for (int i = 0; i < closure.upvalueCount(); i++) {
-//            boolean isLocal = compilerUpvalues[i].isLocal();
-//            int index = compilerUpvalues[i].index();
-//            
-//            if (isLocal)
-//              closure.upvalues()[i] = captureUpvalue(frame.base() + index);
-//            else
-//              closure.upvalues()[i] = frame.closure().upvalues()[index];
-//          }
+//          if (isFalsey(value))
+//            frame.setIP(frame.ip() + offset);
 
           break;
-        
-        case OP_CLOSE_UPVAL:
-          //close the upvalue at the top of the vStack
-//          closeUpvalues(vStack.size() - 1);
 
-          vStack.pop();
+        case OP_LESS:
+          if (!twoNumericOperands())
+            return errorTwoNumbers();
+
+          binaryOp(Operation.OPERATION_LT);
 
           break;
-        
+
+        case OP_LOOP:
+          index = frame.next();
+
+//          frame.setIP(frame.ip() - offset);
+
+          break;
+
+        case OP_METHOD:
+          index = frame.next();
+          identifier = (String)frame.compilation().instrList().constants().get(index);
+          closure = (Closure)vStack.peek();
+          lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
+
+          lpcObject.methods().put(identifier, closure);
+
+          vStack.pop(); //mMethod
+
+          break;
+
+        case OP_MULTIPLY:
+          if (!twoNumericOperands())
+            return errorTwoNumbers();
+
+          binaryOp(Operation.OPERATION_MULT);
+
+          break;
+
+        case OP_NEGATE:
+          if (!oneNumericOperand())
+            return errorOneNumber();
+
+          value = vStack.pop();
+
+          vStack.push(-(double)value);
+
+          break;
+
+        case OP_NIL: vStack.push(null); break;
+
+        case OP_NOT:
+          value = vStack.pop();
+
+          vStack.push(isFalsey(value));
+
+          break;
+
+        case OP_OBJECT:
+          index = frame.next();
+          identifier = (String)frame.compilation().instrList().constants().get(index);
+          lpcObject = new LPCObject(identifier);
+
+          vStack.push(lpcObject);
+
+          break;
+
+        case OP_POP: vStack.pop(); break;
+
         case OP_RETURN:
           //We're about to discard the called function's entire
           //stack window, so pop the function's return value but
@@ -300,86 +494,27 @@ public class VM {
 
           break;
 
-        case OP_COMPILE:
-          identifier = (String)instr.operands()[0];
-          C_Compilation c_Compilation = c_Compilation(identifier);
+        case OP_SET_GLOBAL:
+          index = frame.next();
+          key = (String)frame.compilation().instrList().constants().get(index);
 
-          vStack.push(c_Compilation);
-          
+          if (!globals.containsKey(key))
+            return error("Undefined object '" + key + "'.");
+
+          //Peek here, not pop; assignment is an expression,
+          //so we leave value vStacked in case the assignment
+          //is nested inside a larger expression.
+          globals.put(key, vStack.peek());
+
           break;
-        
-        case OP_INHERIT:
+
+        case OP_SET_LOCAL:
+          index = frame.next(); //offset from base
           value = vStack.peek();
 
-          if (!(value instanceof LPCObject)) {
-            runtimeError("Inherited object must be an LPCObject.");
-
-            return InterpretResult.INTERPRET_RUNTIME_ERROR;
-          }
-
-          lpcObject = (LPCObject)value; //super object
-
-          value = vStack.get(vStack.size() - 2);
-
-          if (!(value instanceof LPCObject)) {
-            runtimeError("Inheriting object must be an LPCObject.");
-
-            return InterpretResult.INTERPRET_RUNTIME_ERROR;
-          }
-
-          LPCObject iSubObject = (LPCObject)value;
-
-          iSubObject.inherit(lpcObject); //copies down fields and methods
-
-          vStack.pop(); // Inheriting object.
+          vStack.set(frame.base() + index, value);
 
           break;
-
-        case OP_OBJECT: //Create a new, empty LPCObject
-          identifier = (String)instr.operands()[0];
-          lpcObject = new LPCObject(identifier);
-
-          vStack.push(lpcObject);
-
-          break;
-        
-        case OP_GET_PROP:
-          value = vStack.peek();
-
-          if (!(value instanceof LPCObject)) {
-            runtimeError("Only LPC Objects have properties.");
-
-            return InterpretResult.INTERPRET_RUNTIME_ERROR;
-          }
-          
-          key = (String)instr.operands()[0];
-          lpcObject = (LPCObject)value;
-
-          //Look first for a matching field.
-          if (lpcObject.fields().containsKey(key)) {
-            Object field = lpcObject.fields().get(key);
-            
-            vStack.pop(); // LPCObject
-
-            vStack.push(field);
-
-            break;
-          }
-          
-          //If no field, look for a matching method.
-          if (lpcObject.methods().containsKey(key)) {
-            Closure method = lpcObject.methods().get(key);
-            
-            vStack.pop(); // LPCObject
-                    
-            vStack.push(method);
-            
-            break;
-          }
-          
-          runtimeError("Undefined property '" + key + "'.");
-          
-          return InterpretResult.INTERPRET_RUNTIME_ERROR;
 
         case OP_SET_PROP:
           value = vStack.get(vStack.size() - 2);
@@ -389,16 +524,17 @@ public class VM {
 
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
           }
-            
-          key = (String)instr.operands()[0];
+
+          index = frame.next();
+          key = (String)frame.compilation().instrList().constants().get(index);
           lpcObject = (LPCObject)value;
 
           //Look for a matching field.
           if (!lpcObject.fields().containsKey(key)) {
             runtimeError("Undefined field '" + key + "'.");
-                    
+
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
-          }     
+          }
 
           //Set the existing field to its new value.
           lpcObject.fields().put(key, vStack.peek());
@@ -413,138 +549,53 @@ public class VM {
           vStack.push(value);
 
           break;
-          
-        case OP_FIELD: //Define a new field in an LPCObject
-          identifier = (String)instr.operands()[0]; //field name
-          value = vStack.peek();
-          lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
 
-          lpcObject.fields().put(identifier, value);
-
-          vStack.pop(); // dfFieldValue
-
-          break;
-          
-        case OP_METHOD: //Define a new method in an LPCObject
-          identifier = (String)instr.operands()[0]; //method name
-          closure = (Closure)vStack.peek();
-          lpcObject = (LPCObject)vStack.get(vStack.size() - 2);
-
-          lpcObject.methods().put(identifier, closure);
-
-          vStack.pop(); //mMethod
+        case OP_SET_UPVAL:
+//        offset = (int)instr.operands()[0];
+//        upvalue = frame.closure().upvalues()[offset];
+//        value = vStack.peek();
+//
+//        if (upvalue.location() != -1) //i.e., open
+//          vStack.set(upvalue.location(), value);
+//        else //i.e., closed
+//          upvalue.setClosedValue(value);
 
           break;
-          
-          case OP_EQUAL:
-            equate();
 
-            break;
-          
-          case OP_GREATER:
-            if (!twoNumericOperands())
-              return errorTwoNumbers();
+        case OP_SUBTRACT:
+          if (!twoNumericOperands())
+            return errorTwoNumbers();
 
-            binaryOp(Operation.OPERATION_GT);
+          binaryOp(Operation.OPERATION_SUBTRACT);
 
-            break;
-          
-          case OP_LESS:
-            if (!twoNumericOperands())
-              return errorTwoNumbers();
-
-            binaryOp(Operation.OPERATION_LT);
-
-            break;
-          
-          case OP_ADD:
-            if (twoStringOperands())
-              concatenate();
-            else if (twoNumericOperands())
-              binaryOp(Operation.OPERATION_PLUS);
-            else
-              return errorTwoNumbersOrStrings();
-
-            break;
-          
-          case OP_SUBTRACT:
-            if (!twoNumericOperands())
-              return errorTwoNumbers();
-
-            binaryOp(Operation.OPERATION_SUBTRACT);
-
-            break;
-          
-          case OP_MULTIPLY:
-            if (!twoNumericOperands())
-              return errorTwoNumbers();
-
-            binaryOp(Operation.OPERATION_MULT);
-
-            break;
-          
-          case OP_DIVIDE:
-            if (!twoNumericOperands())
-              return errorTwoNumbers();
-
-            binaryOp(Operation.OPERATION_DIVIDE);
-
-            break;
-          
-          case OP_NOT:
-            value = vStack.pop();
-            
-            vStack.push(isFalsey(value));
-
-            break;
-          
-          case OP_NEGATE:
-            if (!oneNumericOperand())
-              return errorOneNumber();
-            
-            value = vStack.pop();
-
-            vStack.push(-(double)value);
-
-            break;
-          
-          case OP_JUMP:
-            index = (int)instr.operands()[0];
-
-//            frame.setIP(frame.ip() + offset);
-
-            break;
-          
-          case OP_JUMP_IF_FALSE:
-            index = (int)instr.operands()[0];
-            value = vStack.peek();
-
-//            if (isFalsey(value))
-//              frame.setIP(frame.ip() + offset);
-
-            break;
-          
-          case OP_LOOP:
-            index = (int)instr.operands()[0];
-
-//            frame.setIP(frame.ip() - offset);
-
-            break;
-            
-        case OP_GET_SUPER:
-        
           break;
-      default:
-        
-        break;
+
+        case OP_SUPER_INVOKE:
+          index = frame.next();
+          argCount = frame.next();
+          identifier = (String)frame.compilation().instrList().constants().get(index);
+          lpcObject = (LPCObject)vStack.pop(); //super object
+
+          if (!invokeFromObject(lpcObject, identifier, argCount))
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+
+          frame = fStack.peek();
+
+          break;
+
+        case OP_TRUE: vStack.push(true); break;
+
+        default:
+
+          break;
       } //switch
     } //for(;;)
   } //run()
 
   //reset()
   private void reset() {
-    vStack = new Stack<Object>();
-    fStack = new Stack<RunFrame>();
+    vStack = new Stack<>();
+    fStack = new Stack<>();
     openUpvalues = null;
   }
 
@@ -558,15 +609,16 @@ public class VM {
     //loop through RunFrames on fStack in reverse order
     for (int i = fStack.size() - 1; i >=0; i--) {
       RunFrame frame = fStack.get(i);
-      C_Compilation c_Compilation = frame.c_Compilation();
-      int line = frame.previous().line();
+      C_Compilation compilation = frame.compilation();
+      C_InstrList instrList = compilation.instrList();
+      int line = instrList.lines().get(instrList.lines().size() - 2);
 
       System.err.print("[line " + line + "] in ");
 
-      if (c_Compilation instanceof C_Script)
+      if (compilation.type() == TYPE_SCRIPT)
         System.err.print("script.\n");
       else
-        System.err.print(c_Compilation.name() + "().\n");
+        System.err.print(compilation.name() + "().\n");
     }
 
     reset(); // vStack, fStack, openUpvalues
@@ -577,7 +629,7 @@ public class VM {
     globals.put(name, nativeFn);
   }
 
-  public C_Compilation c_Compilation(String path) {
+  public C_Compilation getCompilation(String path) {
     String fullPath = getLibPath() + path;
     SourceFile file  = new SourceFile(fullPath);
     C_ObjectCompiler compiler = new C_ObjectCompiler();
@@ -614,11 +666,11 @@ public class VM {
 
     return true;
   }
-  
+
   //frame(Compilation)
   private void frame(C_Compilation c_Compilation) {
 	  int base = vStack.size() - 1;
-	  
+
 	  fStack.push(new RunFrame(c_Compilation, base));
   }
 
@@ -747,7 +799,7 @@ public class VM {
 //    Compilation compilation = frame.closure().cFunction();
 //    List<Instruction> instrs = compilation.instructions();
 //    Instruction instr = instrs.get(frame.getAndIncrementIP());
-//    
+//
 //    return instr;
 //  }
 

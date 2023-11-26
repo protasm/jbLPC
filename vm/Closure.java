@@ -3,19 +3,19 @@ package jbLPC.vm;
 import jbLPC.compiler.C_Function;
 
 public class Closure {
-  private C_Function cFunction;
+  private C_Function function;
   private Upvalue[] upvalues;
 
   //Closure()
-  public Closure(C_Function cFunction) {
-    this.cFunction = cFunction;
+  public Closure(C_Function function) {
+    this.function = function;
 
-    upvalues = new Upvalue[cFunction.upvalueCount()];
+    upvalues = new Upvalue[function.upvalueCount()];
   }
 
   //cFunction()
-  public C_Function cFunction() {
-    return cFunction;
+  public C_Function function() {
+    return function;
   }
 
   //upvalues()
@@ -26,6 +26,6 @@ public class Closure {
   //toString()
   @Override
   public String toString() {
-    return cFunction.toString();
+    return "<closure: " + function.name() + ">";
   }
 }

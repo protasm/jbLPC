@@ -57,4 +57,22 @@ public class C_InstrList {
   public List<Integer> lines() {
     return lines;
   }
+
+  //printCodes()
+  public String printCodes() {
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("[");
+
+    for (int i = 0; i < codes.size(); i++) {
+      sb.append(String.format("%02X", codes.get(i)));
+
+      if (i < codes.size() - 1)
+        sb.append(", ");
+    }
+
+    sb.append("]");
+
+    return sb.toString();
+  }
 }

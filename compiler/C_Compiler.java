@@ -112,60 +112,97 @@ public class C_Compiler {
   
   //typedDeclaration()
   protected void typedDeclaration() {
+  int index = parseVariable("Expect function or variable name.");
+  
   if (!parser.check(TOKEN_LEFT_PAREN))
-      varDeclaration();
+      varDeclaration(index);
     else
-      funDeclaration();
+      funDeclaration(index);
+  }
+  
+  //parseVariable(String)
+  private int parseVariable(String errorMessage) {
+    parser.consume(TOKEN_IDENTIFIER, errorMessage);
+    
+    declareVariable();
+    
+    //Exit the function if we're in a local scope,
+    //returning a dummy table index.
+    if (currScope.depth() > 0) return 0;
+  
+    return emitConstant(parser.previous().lexeme());
+  }
+  
+  //declareVariable()
+  private void declareVariable() {
+    if (currScope.depth() == 0)
+      return;
+  
+    //In the locals, a variable is "declared" when it is
+    //added to the scope.
+    Token token = parser.previous();
+  
+    //Start at the end of the locals array and work backward,
+    //looking for an existing variable with the same name.
+    for (int i = currScope.locals().size() - 1; i >= 0; i--) {
+      C_Local local = currScope.locals().get(i);
+      
+      if (local.depth() != -1 && local.depth() < currScope.depth())
+        break;
+
+      if (identifiersEqual(token, local.token()))
+        parser.error("Already a variable with this name in this scope.");
+    }
+
+    //Record existence of local variable.
+    addLocal(parser.previous());
   }
 
-  //varDeclaration()
-  protected void varDeclaration() {
-	parser.consume(TOKEN_IDENTIFIER, "Expect variable name.");
-	
-	Token token = parser.previous();
-	
-	if (currScope.depth() > 0)
-      declareLocal(token); //add new local
-
+  //varDeclaration(int)
+  protected void varDeclaration(int index) {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
       emitCode(OP_NIL);
-
-    if (currScope.depth() > 0)
-      defineLocal(); //mark local available
-    else if (currScope.compilation().type() == TYPE_SCRIPT) {
-      int index = currInstrList().addConstant(token.lexeme());
-      
-      emitCode(OP_DEF_GLOBAL);
-      emitCode(index);
-    }
-
+     
+    defineVariable(index);
+  
     //handle variable declarations of the form:
-    //int x = 99, y, z = "hello";
+    //var x = 99, y, z = "hello";
     if (parser.match(TOKEN_COMMA)) {
-      varDeclaration(); //recursive loop
+      index = parseVariable("Expect variable name.");
+  
+      varDeclaration(index);
 
       return;
     }
 
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration(s).");
   }
+  
+  //markInitialized()
+  private void markInitialized() {
+    if (currScope.depth() == 0) return;
 
-  //parseVariable(String)
-//  protected void parseVariable(String errorMessage) {
-//    parser.consume(TOKEN_IDENTIFIER, errorMessage);
-//
-//    Token token = parser.previous();
-//    
-//    if (currScope.depth() == 0) { //Global
-//      instr.addOperand(token.lexeme());
-//      
-//      return;
-//    }
-//    
-//    declareLocalVariable(token);
-//  }
+    currScope.markTopLocalInitialized();
+  } 
+
+  //defineVariable(int)
+  private void defineVariable(int index) {
+    if (currScope.depth() > 0) {
+      //In the locals, a variable is "defined" when it
+      //becomes available for use.
+      markInitialized();
+  
+      //No code needed to create a local variable at
+      //runtime; it's on top of the stack.
+      
+      return;
+    } 
+
+    emitCode(OP_DEF_GLOBAL);
+    emitCode(index);
+  }
 
   //declareLocal(Token)
   private void declareLocal(Token token) {
@@ -204,9 +241,10 @@ public class C_Compiler {
   }
 
   //addLocal(Token)
-//  private void addLocal(Token token) {
-//  }
-
+  private void addLocal(Token token) {
+    currScope.locals().push(new C_Local(token, -1));
+  }
+  
   //addUpvalue(Scope, byte, boolean)
   private int addUpvalue(C_Scope c_Scope, Integer index, boolean isLocal) {
     int upvalueCount = c_Scope.upvalues().size();
@@ -356,9 +394,11 @@ public class C_Compiler {
     //Initializer clause.
     if (parser.match(TOKEN_SEMICOLON)) {
       // No initializer.
-    } else if (parser.match(TOKEN_PRIMITIVE))
-      varDeclaration();
-    else
+    } else if (parser.match(TOKEN_PRIMITIVE)) {
+      int index = parseVariable("Expect variable name.");
+    
+      varDeclaration(index);
+    } else
       expressionStatement();
 
     int loopStart = currInstrList().codes().size();
@@ -408,10 +448,8 @@ public class C_Compiler {
     endScope();
   }
 
-  //funDeclaration()
-  protected void funDeclaration() {
-	  parser.consume(TOKEN_IDENTIFIER, "Expect function name.");
-	
+  //funDeclaration(int)
+  protected void funDeclaration(int index) {
     //Function declaration's variable is marked "initialized"
     //before compiling the body so that the name can be
     //referenced inside the body without generating an error.
@@ -419,17 +457,17 @@ public class C_Compiler {
 
     function();
 
-    currScope.markTopLocalInitialized();
+    defineVariable(index);
   }
 
   //function()
   private void function() {
     C_Function function = new C_Function(parser.previous().lexeme());
-    C_Scope c_Scope = new C_Scope(
+    C_Scope scope = new C_Scope(
       currScope, //enclosing Scope
       function
     );
-    currScope = c_Scope;
+    currScope = scope;
 
     beginScope();
 
@@ -441,9 +479,9 @@ public class C_Compiler {
 
         parser.consume(TOKEN_PRIMITIVE, "Expect type for parameter.");
 
-        parser.consume(TOKEN_IDENTIFIER, "Expect parameter name.");
+        int index = parseVariable("Expect parameter name.");
 
-        currScope.markTopLocalInitialized();
+        defineVariable(index);
       } while (parser.match(TOKEN_COMMA));
 
     parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
@@ -453,11 +491,15 @@ public class C_Compiler {
 
     function = endFunction(); //sets currScope to enclosing
 
-    //TODO: fix
-    int index = emitConstant(new Object[] { function, c_Scope.upvalues() });
+    int index = emitConstant(function);
 
     emitCode(OP_CLOSURE);
     emitCode(index);
+    
+    for (C_Upvalue upvalue : scope.upvalues()) {
+      emitCode(upvalue.isLocal() ? 1 : 0);
+      emitCode(upvalue.index());
+    }
 
     //No endScope() needed because Scope is ended completely
     //at the end of the function body.
