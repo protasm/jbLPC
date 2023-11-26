@@ -2,18 +2,18 @@ package jbLPC.compiler;
 
 import jbLPC.scanner.Token;
 
-public class Local {
+public class C_Local {
   private Token token;
   private int depth;
   private boolean isCaptured;
 
-  //Local()
-  public Local() {
+  //C_Local()
+  public C_Local() {
     this(null, -1);
   }
 
-  //Local(Token, int)
-  public Local(Token token, int depth) {
+  //C_Local(Token, int)
+  public C_Local(Token token, int depth) {
     this.token = token;
     this.depth = depth;
 

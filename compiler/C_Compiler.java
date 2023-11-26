@@ -1,25 +1,23 @@
 package jbLPC.compiler;
 
-import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_CLOSE_UPVAL;
-import static jbLPC.compiler.OpCode.OP_CLOSURE;
-import static jbLPC.compiler.OpCode.OP_CONST;
-import static jbLPC.compiler.OpCode.OP_DIVIDE;
-import static jbLPC.compiler.OpCode.OP_GET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
-import static jbLPC.compiler.OpCode.OP_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_JUMP;
-import static jbLPC.compiler.OpCode.OP_JUMP_IF_FALSE;
-import static jbLPC.compiler.OpCode.OP_LOOP;
-import static jbLPC.compiler.OpCode.OP_MULTIPLY;
-import static jbLPC.compiler.OpCode.OP_NIL;
-import static jbLPC.compiler.OpCode.OP_POP;
-import static jbLPC.compiler.OpCode.OP_RETURN;
-import static jbLPC.compiler.OpCode.OP_SET_GLOBAL;
-import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
-import static jbLPC.compiler.OpCode.OP_SUBTRACT;
+import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_SCRIPT;
+import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
+import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_JUMP;
+import static jbLPC.compiler.C_OpCode.OP_JUMP_IF_FALSE;
+import static jbLPC.compiler.C_OpCode.OP_LOOP;
+import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
+import static jbLPC.compiler.C_OpCode.OP_NIL;
+import static jbLPC.compiler.C_OpCode.OP_POP;
+import static jbLPC.compiler.C_OpCode.OP_RETURN;
+import static jbLPC.compiler.C_OpCode.OP_SET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
 import static jbLPC.parser.Parser.Precedence.PREC_ASSIGNMENT;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_ELSE;
@@ -47,24 +45,38 @@ import java.util.stream.Collectors;
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
-import jbLPC.util.Prefs;
 
-public class LPCCompiler {
+public class C_Compiler {
   protected Parser parser;
-  protected Scope currScope;
-  protected CompilerClass currClass;
+  protected C_Scope currScope;
+  protected C_CompilerClass currClass;
 
-  //LPCCompiler()
-  public LPCCompiler() {
-    Debugger.instance().printProgress("LPCCompiler initialized");
+  //C_Compiler()
+  public C_Compiler() {
+    Debugger.instance().printProgress("Compiler initialized");
   }
-  
+
+  //parser()
+  public Parser parser() {
+    return parser;
+  }
+
+  //currInstrList()
+  public C_InstrList currInstrList() {
+    return currScope.compilation().instrList();
+  }
+
+  //currClass()
+  public C_CompilerClass currClass() {
+    return currClass;
+  }
+
   //compile(String, String)
-  public Compilation compile(String name, String source) {
-	parser = new Parser(this, source);
-    currScope = new Scope(
+  public C_Compilation compile(String name, String source) {
+	  parser = new Parser(this, source);
+    currScope = new C_Scope(
       null, //enclosing Scope
-      new C_Script() //compilation
+      new C_Compilation(name, TYPE_SCRIPT)
     );
 
     Debugger.instance().printProgress("Compiling '" + name + "'");
@@ -79,8 +91,8 @@ public class LPCCompiler {
     if (parser.hadError())
       return null;
       
-    currInstructions().add(new Instruction(OP_NIL)); //return value; always null for a Script
-    currInstructions().add(new Instruction(OP_RETURN));
+    currInstrList().addInstr(OP_NIL); //return value; always null for a Script
+    currInstrList().addInstr(OP_RETURN);
 
     Debugger.instance().traceCompilation(currScope);
     
@@ -118,12 +130,15 @@ public class LPCCompiler {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      currInstructions().add(new Instruction(OP_NIL));
+      currInstrList().addInstr(OP_NIL);
 
     if (currScope.depth() > 0)
       defineLocal(); //mark local available
-    else if (currScope.compilation() instanceof C_Script) {
-      currInstructions().add(new Instruction(OP_GLOBAL, token.lexeme()));
+    else if (currScope.compilation().type() == TYPE_SCRIPT) {
+      int index = currInstrList().addConstant(token.lexeme());
+      
+      currInstrList().addInstr(OP_GLOBAL);
+      currInstrList().addInstr((byte)index);
     }
 
     //handle variable declarations of the form:
@@ -138,39 +153,39 @@ public class LPCCompiler {
   }
 
   //parseVariable(String)
-  protected void parseVariable(String errorMessage) {
-    parser.consume(TOKEN_IDENTIFIER, errorMessage);
-
-    Token token = parser.previous();
-    
-    if (currScope.depth() == 0) { //Global
-      instr.addOperand(token.lexeme());
-      
-      return;
-    }
-    
-    declareLocalVariable(token);
-  }
+//  protected void parseVariable(String errorMessage) {
+//    parser.consume(TOKEN_IDENTIFIER, errorMessage);
+//
+//    Token token = parser.previous();
+//    
+//    if (currScope.depth() == 0) { //Global
+//      instr.addOperand(token.lexeme());
+//      
+//      return;
+//    }
+//    
+//    declareLocalVariable(token);
+//  }
 
   //declareLocal(Token)
   private void declareLocal(Token token) {
     //In the locals, a variable is "declared" when it is
     //added to the scope.
 
-    //Check for an existing local variable with the same name.
+    //Guard against an existing local variable with the same name.
     int currScopeDepth = currScope.depth();
-    List<Local> currScopeLocals = currScope.locals()
+    List<C_Local> currScopeLocals = currScope.locals()
       .stream()
       .filter(item -> (item.depth() == -1 || item.depth() == currScopeDepth))
       .collect(Collectors.toList());
 
-    for (Local local : currScopeLocals)
-      if (identifiersEqual(token, local.token()))
+    for (C_Local c_Local : currScopeLocals)
+      if (identifiersEqual(token, c_Local.token()))
         parser.error("Already a variable with this name in this scope.");
 
     //Record existence of local variable, with "sentinel" depth for now
     //(i.e. declared but not yet made available for use)
-    currScope.locals().push(new Local(token, -1));
+    currScope.locals().push(new C_Local(token, -1));
   }
 
   //expression()
@@ -193,27 +208,28 @@ public class LPCCompiler {
 //  }
 
   //addUpvalue(Scope, byte, boolean)
-  private int addUpvalue(Scope scope, Integer index, boolean isLocal) {
-    int upvalueCount = scope.compilerUpvalues().size();
+  private int addUpvalue(C_Scope c_Scope, Integer index, boolean isLocal) {
+    int upvalueCount = c_Scope.upvalues().size();
 
     for (int i = 0; i < upvalueCount; i++) {
-      CompilerUpvalue compilerUpvalue = scope.getUpvalue(i);
+      C_Upvalue c_Upvalue = c_Scope.getUpvalue(i);
 
       //isLocal controls whether closure captures a local variable or
       //an upvalue from the surrounding function
-      if (compilerUpvalue.index() == index && compilerUpvalue.isLocal() == isLocal)
+      if (c_Upvalue.index() == index && c_Upvalue.isLocal() == isLocal)
         return i;
     }
 
     //Return index of the created upvalue in the currScope's
     //upvalue list.  That index becomes the operand to the
     //OP_GET_UPVALUE and OP_SET_UPVALUE instructions.
-    return scope.addUpvalue(new CompilerUpvalue(index, isLocal));
+    return c_Scope.addUpvalue(new C_Upvalue(index, isLocal));
   }
 
   //argumentList()
-  public Integer argumentList() {
-    Integer argCount = 0;
+  public int argumentList() {
+    int argCount = 0;
+
     if (!parser.check(TOKEN_RIGHT_PAREN))
       do {
         expression();
@@ -239,72 +255,67 @@ public class LPCCompiler {
     parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
   }
 
-  //compoundAssignment(OpCode, OpCode, OpCode)
-  protected void compoundAssignment(OpCode getOp, OpCode setOp, OpCode assignOp) {
-    emitOpCode(getOp);
+  //compoundAssignment(OpCode, OpCode, OpCode, int index)
+  protected void compoundAssignment(C_OpCode getOp, C_OpCode setOp, C_OpCode assignOp, int index) {
+    currInstrList().addInstr(getOp);
+    currInstrList().addInstr((byte)index);
 
     expression();
 
-    emitOpCode(assignOp);
+    currInstrList().addInstr(assignOp);
 
-    emitOpCode(setOp);
+    currInstrList().addInstr(setOp);
+    currInstrList().addInstr((byte)index);
   }
 
-  //instructions()
-  public List<Instruction> currInstructions() {
-    return currScope.compilation().instructions();
-  }
-
-  //currClass()
-  public CompilerClass currClass() {
-    return currClass;
+  //emitInstruction(int)
+  public void emitInstruction(int code) {
+    emitInstruction((byte) code);
   }
 
   //emitInstruction(OpCode)
-  public void emitInstruction(OpCode opCode) {
-	Instruction instr = new Instruction(opCode);
-	
-	emitInstruction(instr);
+  public void emitInstruction(C_OpCode c_OpCode) {
+    emitInstruction(c_OpCode.code());
+  }
+
+  //emitInstruction(byte code)
+  public void emitInstruction(byte code) {
+    if (parser.previous() == null) //may be null for "synthetic" operations
+      currInstrList().addInstr(code);
+    else
+      currInstrList().addInstr(code, parser.previous().line());
   }
   
-  //emitInstruction(Instruction)
-  public void emitInstruction(Instruction instr) {
-    if (parser.previous() != null) //may be null for "synthetic" operations
-      instr.setLine(parser.previous().line());
-    
-    currInstructions().add(instr);
+  //emitConstant(Object)
+  public int emitConstant(Object constant) {
+    return currInstrList().addConstant(constant);
   }
 
   //emitJump(OpCode)
-  public int emitJump(OpCode opCode) {
-    Instruction instr = new Instruction(
-      opCode,
-      255 //placeholder, later backpatched)
-    );
-    
-    emitInstruction(instr);
+  public int emitJump(C_OpCode c_OpCode) {
+    emitInstruction(c_OpCode);
+    emitInstruction((byte)0xFF); //placeholder, later backpatched
 
-    return currInstructions().size() - 1;
+    return currInstrList().instructions().size() - 1;
   }
 
   //emitLoop(int)
   private void emitLoop(int loopStart) {
-    int offset = currInstructions().size() - loopStart + 2;
+    int offset = currInstrList().instructions().size() - loopStart + 2;
 
-    Instruction instr = new Instruction(OP_LOOP, offset);
-
-    emitInstruction(instr);
+    emitInstruction(OP_LOOP);
+    emitInstruction(offset);
   }
 
   //endFunction()
   private C_Function endFunction() {
-    emitOpCode(OP_NIL); //return value?
-    emitOpCode(OP_RETURN);
+    emitInstruction(OP_NIL); //return value?
+    emitInstruction(OP_RETURN);
 
     //Extract assembled function from temporary structure.
     C_Function function = (C_Function)currScope.compilation();
 
-    function.setUpvalueCount(currScope.compilerUpvalues().size());
+    function.setUpvalueCount(currScope.upvalues().size());
 
     if (!parser.hadError())
       Debugger.instance().traceCompilation(currScope);
@@ -324,9 +335,9 @@ public class LPCCompiler {
       currScope.locals().peek().depth() > currScope.depth()
     ) {
       if (currScope.locals().get(currScope.locals().size() - 1).isCaptured())
-          currInstructions().add(new Instruction(OP_CLOSE_UPVAL));
+          emitInstruction(OP_CLOSE_UPVAL);
       else
-        currInstructions().add(new Instruction(OP_POP));
+        emitInstruction(OP_POP);
 
       currScope.locals().pop();
     }
@@ -338,7 +349,7 @@ public class LPCCompiler {
 
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
 
-    currInstructions().add(new Instruction(OP_POP));
+    emitInstruction(OP_POP);
   }
 
   //forStatement()
@@ -355,7 +366,7 @@ public class LPCCompiler {
     else
       expressionStatement();
 
-    int loopStart = currInstructions().size();
+    int loopStart = currInstrList().instructions().size();
 
      //Condition clause.
     int exitJump = -1;
@@ -368,17 +379,17 @@ public class LPCCompiler {
       // Jump out of the loop if the condition is false.
       exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-      currInstructions().add(new Instruction(OP_POP)); // Condition.
+      emitInstruction(OP_POP); // Condition.
     }
 
     //Increment clause.
     if (!parser.match(TOKEN_RIGHT_PAREN)) {
       int bodyJump = emitJump(OP_JUMP);
-      int incrementStart = currInstructions().size();
+      int incrementStart = currInstrList().instructions().size();
 
       expression();
 
-      currInstructions().add(new Instruction(OP_POP));
+      emitInstruction(OP_POP);
 
       parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
 
@@ -396,7 +407,7 @@ public class LPCCompiler {
     if (exitJump != -1) {
       patchJump(exitJump);
 
-      emitOpCode(OP_POP); // Condition.
+      emitInstruction(OP_POP); // Condition.
     }
 
     endScope();
@@ -404,7 +415,7 @@ public class LPCCompiler {
 
   //funDeclaration()
   protected void funDeclaration() {
-	parser.consume(TOKEN_IDENTIFIER, "Expect function name.");
+	  parser.consume(TOKEN_IDENTIFIER, "Expect function name.");
 	
     //Function declaration's variable is marked "initialized"
     //before compiling the body so that the name can be
@@ -419,11 +430,11 @@ public class LPCCompiler {
   //function()
   private void function() {
     C_Function function = new C_Function(parser.previous().lexeme());
-    Scope scope = new Scope(
+    C_Scope c_Scope = new C_Scope(
       currScope, //enclosing Scope
       function
     );
-    currScope = scope;
+    currScope = c_Scope;
 
     beginScope();
 
@@ -435,7 +446,7 @@ public class LPCCompiler {
 
         parser.consume(TOKEN_PRIMITIVE, "Expect type for parameter.");
 
-        parseVariable("Expect parameter name.");
+        parser.consume(TOKEN_IDENTIFIER, "Expect parameter name.");
 
         currScope.markTopLocalInitialized();
       } while (parser.match(TOKEN_COMMA));
@@ -447,25 +458,14 @@ public class LPCCompiler {
 
     function = endFunction(); //sets currScope to enclosing
 
-    Instruction instr = new Instruction(
-      OP_CLOSURE,
-      new Object[] { function, scope.compilerUpvalues() }
-    );
-    
-    currInstructions().add(instr);
+    //TODO: fix
+    int index = emitConstant(new Object[] { function, c_Scope.upvalues() });
+
+    emitInstruction(OP_CLOSURE);
+    emitInstruction(index);
 
     //No endScope() needed because Scope is ended completely
     //at the end of the function body.
-  }
-
-  //identifierConstant(Token)
-  public void identifierConstant(Token token) {
-    emitOperand(token.lexeme());
-  }
-
-  //stringConstant(Token)
-  public void stringConstant(Token token) {
-    emitOperand(token.literal());
   }
 
   //identifiersEqual(Token, Token)
@@ -483,7 +483,7 @@ public class LPCCompiler {
 
     int thenJump = emitJump(OP_JUMP_IF_FALSE);
 
-    currInstructions().add(new Instruction(OP_POP));
+    emitInstruction(OP_POP);
 
     statement();
 
@@ -491,7 +491,7 @@ public class LPCCompiler {
 
     patchJump(thenJump);
 
-    currInstructions().add(new Instruction(OP_POP));
+    emitInstruction(OP_POP);
 
     if (parser.match(TOKEN_ELSE)) statement();
 
@@ -501,61 +501,58 @@ public class LPCCompiler {
   //namedVariable(Token, boolean)
   //generates code to load a variable with the given name onto the vStack.
   public void namedVariable(Token token, boolean canAssign) {
-    Instruction getInstr, setInstr;
+    C_OpCode getOp, setOp;
     
-    int arg = resolveLocal(currScope, token); //index of local var, or -1
+    int index = resolveLocal(currScope, token);
 
-    if (arg != -1) { //local variable
-      getInstr = new Instruction(OP_GET_LOCAL, arg);
-      setInstr = new Instruction(OP_SET_LOCAL, arg);
-//    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
+    if (index != -1) { //local variable
+      getOp = OP_GET_LOCAL;
+      setOp = OP_SET_LOCAL;
+//    } else if ((index = resolveUpvalue(currScope, token)) != -1) { //upvalue
 //      getOp = OP_GET_UPVAL;
 //      setOp = OP_SET_UPVAL;
     } else { //global variable
-      getInstr = new Instruction(OP_GET_GLOBAL, token.lexeme());
-      setInstr = new Instruction(OP_SET_GLOBAL, token.lexeme());
+      index = emitConstant(token.lexeme());
+
+      getOp = OP_GET_GLOBAL;
+      setOp = OP_SET_GLOBAL;
     }
 
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      currInstructions().add(setInstr);
-//    } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
-//      compoundAssignment(getOp, setOp, OP_SUBTRACT, arg);
-//    else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
-//      compoundAssignment(getOp, setOp, OP_ADD, arg);
-//    else if (canAssign && parser.match(TOKEN_SLASH_EQUAL))
-//      compoundAssignment(getOp, setOp, OP_DIVIDE, arg);
-//    else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
-//      compoundAssignment(getOp, setOp, OP_MULTIPLY, arg);
-    } else { //retrieval
-      currInstructions().add(getInstr);
+      emitInstruction(setOp);
+      emitInstruction(index);
+    } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
+      compoundAssignment(getOp, setOp, OP_SUBTRACT, index);
+    else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
+      compoundAssignment(getOp, setOp, OP_ADD, index);
+    else if (canAssign && parser.match(TOKEN_SLASH_EQUAL))
+      compoundAssignment(getOp, setOp, OP_DIVIDE, index);
+    else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
+      compoundAssignment(getOp, setOp, OP_MULTIPLY, index);
+    else { //retrieval
+      emitInstruction(getOp);
+      emitInstruction(index);
     }
-  }
-
-  //parser()
-  public Parser parser() {
-    return parser;
   }
 
   //patchJump(int)
   public void patchJump(int offset) {
     // -1 to adjust for the jump offset itself.
-    int jump = currInstructions().size() - offset - 1;
+    int jump = currInstrList().instructions().size() - offset - 1;
 
-    Instruction instr = new Instruction(OP_JUMP, jump);
-
-    currInstructions().set(offset, instr);
+    currInstrList().instructions().set(offset, (byte)jump);
   }
 
   //resolveLocal(Scope, Token)
-  protected int resolveLocal(Scope scope, Token token) {
+  protected int resolveLocal(C_Scope c_Scope, Token token) {
     //traverse locals backward, looking for a match
-	for (int i = scope.locals().size() - 1; i >= 0; i--) {
-	    Local local = scope.locals().get(i);
+	for (int i = c_Scope.locals().size() - 1; i >= 0; i--) {
+	    C_Local c_Local = c_Scope.locals().get(i);
 	  
-	    if (identifiersEqual(token, local.token())) {  //found match
-	      if (local.depth() == -1) //"sentinel" depth
+	    if (identifiersEqual(token, c_Local.token())) {  //found match
+	      if (c_Local.depth() == -1) //"sentinel" depth
 	        parser.error("Can't read local variable in its own initializer.");
 	    
 	      return i;
@@ -593,18 +590,18 @@ public class LPCCompiler {
 
   //returnStatement()
   private void returnStatement() {
-    if (currScope.compilation() instanceof C_Script)
+    if (currScope.compilation().type() == TYPE_SCRIPT)
       parser.error("Can't return from top-level code.");
 
     if (parser.match(TOKEN_SEMICOLON)) //no return value provided
-      currInstructions().add(new Instruction(OP_NIL));
+      emitInstruction(OP_NIL);
     else { //handle return value
       expression();
 
       parser.consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
     }
 
-    currInstructions().add(new Instruction(OP_RETURN));
+    emitInstruction(OP_RETURN);
   }
 
   //statement()
@@ -634,7 +631,7 @@ public class LPCCompiler {
 
   //whileStatement()
   private void whileStatement() {
-    int loopStart = currInstructions().size();
+    int loopStart = currInstrList().instructions().size();
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
 
@@ -644,7 +641,7 @@ public class LPCCompiler {
 
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
 
-    currInstructions().add(new Instruction(OP_POP));
+    emitInstruction(OP_POP);
 
     statement();
 
@@ -652,6 +649,6 @@ public class LPCCompiler {
 
     patchJump(exitJump);
 
-    currInstructions().add(new Instruction(OP_POP));
+    emitInstruction(OP_POP);
   }
 }

@@ -6,40 +6,42 @@ import java.util.Stack;
 
 import jbLPC.scanner.Token;
 
-public class Scope {
-  private Scope enclosing;
-  private Compilation compilation;
-  private Stack<Local> locals;
-  private List<CompilerUpvalue> compilerUpvalues;
+import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_FUNCTION;
+
+public class C_Scope {
+  private C_Scope enclosing;
+  private C_Compilation compilation;
+  private Stack<C_Local> locals;
+  private List<C_Upvalue> upvalues;
   private int depth; //the number of surrounding blocks
 
   //Scope(Scope, Compilation)
-  public Scope(Scope enclosing, Compilation compilation) {
+  public C_Scope(C_Scope enclosing, C_Compilation compilation) {
     this.enclosing = enclosing;
 
     this.compilation = compilation;
     locals = new Stack<>();
-    compilerUpvalues = new ArrayList<>();
+    upvalues = new ArrayList<>();
     depth = 0;
 
     //Block out stack slot zero for the compilation being called.
     Token token;
 
-    if (compilation instanceof C_Function)
+    if (compilation.type() == TYPE_FUNCTION)
       token = new Token(null, "", null, -1);
     else
       token = new Token(null, "this", null, -1);
 
-    locals.push(new Local(token, 0));
+    locals.push(new C_Local(token, 0));
   }
 
   //enclosing()
-  public Scope enclosing() {
+  public C_Scope enclosing() {
     return enclosing;
   }
 
   //compilation()
-  public Compilation compilation() {
+  public C_Compilation compilation() {
     return compilation;
   }
 
@@ -54,13 +56,13 @@ public class Scope {
   }
 
   //locals()
-  public Stack<Local> locals() {
+  public Stack<C_Local> locals() {
     return locals;
   }
 
   //upvalues()
-  public List<CompilerUpvalue> compilerUpvalues() {
-    return compilerUpvalues;
+  public List<C_Upvalue> upvalues() {
+    return upvalues;
   }
 
   //markTopLocalInitialized()
@@ -68,16 +70,16 @@ public class Scope {
     locals.peek().setDepth(depth);
   }
 
-  //addUpvalue(Upvalue)
-  public int addUpvalue(CompilerUpvalue compilerUpvalue) {
-    compilerUpvalues.add(compilerUpvalue);
+  //addUpvalue(C_Upvalue)
+  public int addUpvalue(C_Upvalue upvalue) {
+    upvalues.add(upvalue);
 
     //return index of newly-added upvalue
-    return compilerUpvalues.size() - 1;
+    return upvalues.size() - 1;
   }
 
   //getUpvalue(int)
-  public CompilerUpvalue getUpvalue(int index) {
-    return compilerUpvalues.get(index);
+  public C_Upvalue getUpvalue(int index) {
+    return upvalues.get(index);
   }
 }

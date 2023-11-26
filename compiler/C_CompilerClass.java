@@ -1,17 +1,17 @@
 package jbLPC.compiler;
 
-public class CompilerClass {
-  private CompilerClass enclosing;
+public class C_CompilerClass {
+  private C_CompilerClass enclosing;
   private boolean hasSuperclass;
 
   //CompilerClass(CompilerClass, boolean)
-  public CompilerClass(CompilerClass enclosing, boolean hasSuperclass) {
+  public C_CompilerClass(C_CompilerClass enclosing, boolean hasSuperclass) {
     this.enclosing = enclosing;
     this.hasSuperclass = hasSuperclass;
   }
 
   //enclosing()
-  public CompilerClass enclosing() {
+  public C_CompilerClass enclosing() {
     return enclosing;
   }
 

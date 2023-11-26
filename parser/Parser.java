@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import jbLPC.compiler.LPCCompiler;
+import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.parselet.*;
 import jbLPC.scanner.Scanner;
 import jbLPC.scanner.Token;
@@ -31,7 +31,7 @@ public class Parser {
     private Precedence() {}
   }
 
-  private LPCCompiler lPCCompiler;
+  private C_Compiler c_Compiler;
   private Iterator<Token> tokens;
 
   private Map<TokenType, ParseRule> tokenTypeToRule;
@@ -42,8 +42,8 @@ public class Parser {
   private boolean panicMode;
 
   //Parser()
-  public Parser(LPCCompiler lPCCompiler, String source) {
-    this.lPCCompiler = lPCCompiler;
+  public Parser(C_Compiler c_Compiler, String source) {
+    this.c_Compiler = c_Compiler;
     tokens = new Scanner(source);
 
     tokenTypeToRule = new HashMap<>();
@@ -194,7 +194,7 @@ public class Parser {
 
     boolean canAssign = (precedence <= PREC_ASSIGNMENT);
 
-    prefixRule.parse(this, lPCCompiler, canAssign);
+    prefixRule.parse(this, c_Compiler, canAssign);
 
     //infix parsing loop
     while (precedence <= getRule(current.type()).precedence()) {
@@ -202,7 +202,7 @@ public class Parser {
 
       Parselet infixRule = getRule(previous.type()).infix();
 
-      infixRule.parse(this, lPCCompiler, canAssign);
+      infixRule.parse(this, c_Compiler, canAssign);
     }
 
     if (canAssign)

@@ -6,14 +6,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
+import jbLPC.compiler.C_Compilation;
+import jbLPC.compiler.C_Compiler;
 import jbLPC.compiler.C_Function;
-import jbLPC.compiler.C_Script;
-import jbLPC.compiler.Compilation;
 //import jbLPC.compiler.CompilerUpvalue;
-import jbLPC.compiler.HasArity;
-import jbLPC.compiler.Instruction;
-import jbLPC.compiler.LPCCompiler;
-import jbLPC.compiler.LPCObjectCompiler;
+import jbLPC.compiler.C_HasArity;
+import jbLPC.compiler.C_ObjectCompiler;
 import jbLPC.debug.Debugger;
 import jbLPC.nativefn.NativeClock;
 import jbLPC.nativefn.NativeCompileLPCObject;
@@ -64,8 +62,8 @@ public class VM {
 
   //interpret(String)
   public InterpretResult interpret(String name, String source) {
-    LPCCompiler compiler = new LPCCompiler();
-    C_Script cScript = (C_Script)compiler.compile(name, source);
+    C_Compiler compiler = new C_Compiler();
+    C_Compilation cScript = (C_Compilation)compiler.compile(name, source);
 
     if (cScript == null)
       return InterpretResult.INTERPRET_COMPILE_ERROR;
@@ -86,7 +84,7 @@ public class VM {
     RunFrame frame = fStack.peek(); //cached copy of current RunFrame
       
     //reusable scratchpad vars
-    Instruction instr;
+    Byte cOpCode;
     int offset, argCount;
     String key, identifier;
     Object value;
@@ -100,32 +98,32 @@ public class VM {
       //the vStack; if so, frame it up to be run immediately.
       if (
         !vStack.isEmpty() &&
-        vStack.peek() instanceof Compilation
+        vStack.peek() instanceof C_Compilation
       ) {
-        Compilation compilation = (Compilation)vStack.peek();
+        C_Compilation c_Compilation = (C_Compilation)vStack.peek();
         
-        Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
+        Debugger.instance().printProgress("Executing '" + c_Compilation.name() + "'");
         
-    	frame(compilation);
+    	  frame(c_Compilation);
 
-    	frame = fStack.peek();
+    	  frame = fStack.peek();
     	
-    	vStack.pop();
+    	  vStack.pop();
     	  
-    	continue;
+    	  continue;
       }
 
-      instr = frame.next();
+      cOpCode = frame.next();
       
-      if (instr == null) {
-    	runtimeError("Unexpected end of instructions in current frame.");
+      if (cOpCode == null) {
+    	  runtimeError("Unexpected end of instructions in current frame.");
     	  
         return InterpretResult.INTERPRET_RUNTIME_ERROR;
       }
 
       Debugger.instance().traceExecution(instr, globals, vStack);
       
-      switch (instr.opCode()) {
+      switch (cOpCode) {
         case OP_CONST:
           value = instr.operands()[0];
 
@@ -307,9 +305,9 @@ public class VM {
 
         case OP_COMPILE:
           identifier = (String)instr.operands()[0];
-          Compilation compilation = compilation(identifier);
+          C_Compilation c_Compilation = c_Compilation(identifier);
 
-          vStack.push(compilation);
+          vStack.push(c_Compilation);
           
           break;
         
@@ -563,15 +561,15 @@ public class VM {
     //loop through RunFrames on fStack in reverse order
     for (int i = fStack.size() - 1; i >=0; i--) {
       RunFrame frame = fStack.get(i);
-      Compilation compilation = frame.compilation();
+      C_Compilation c_Compilation = frame.c_Compilation();
       int line = frame.previous().line();
 
       System.err.print("[line " + line + "] in ");
 
-      if (compilation instanceof C_Script)
+      if (c_Compilation instanceof C_Script)
         System.err.print("script.\n");
       else
-        System.err.print(compilation.name() + "().\n");
+        System.err.print(c_Compilation.name() + "().\n");
     }
 
     reset(); // vStack, fStack, openUpvalues
@@ -582,10 +580,10 @@ public class VM {
     globals.put(name, nativeFn);
   }
 
-  public Compilation compilation(String path) {
+  public C_Compilation c_Compilation(String path) {
     String fullPath = getLibPath() + path;
     SourceFile file  = new SourceFile(fullPath);
-    LPCObjectCompiler compiler = new LPCObjectCompiler();
+    C_ObjectCompiler compiler = new C_ObjectCompiler();
 
     return compiler.compile(
       Paths.get(file.path()),
@@ -621,10 +619,10 @@ public class VM {
   }
   
   //frame(Compilation)
-  private void frame(Compilation compilation) {
+  private void frame(C_Compilation c_Compilation) {
 	  int base = vStack.size() - 1;
 	  
-	  fStack.push(new RunFrame(compilation, base));
+	  fStack.push(new RunFrame(c_Compilation, base));
   }
 
   //call(NativeFn, int)
@@ -837,7 +835,7 @@ public class VM {
   }
 
   //checkArity(HasArity, int)
-  private boolean checkArity(HasArity callee, int argCount) {
+  private boolean checkArity(C_HasArity callee, int argCount) {
     int arity = callee.arity();
 
     if (arity < 0) {

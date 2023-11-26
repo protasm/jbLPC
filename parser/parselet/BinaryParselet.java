@@ -1,22 +1,22 @@
 package jbLPC.parser.parselet;
 
-import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_DIVIDE;
-import static jbLPC.compiler.OpCode.OP_EQUAL;
-import static jbLPC.compiler.OpCode.OP_GREATER;
-import static jbLPC.compiler.OpCode.OP_LESS;
-import static jbLPC.compiler.OpCode.OP_MULTIPLY;
-import static jbLPC.compiler.OpCode.OP_NOT;
-import static jbLPC.compiler.OpCode.OP_SUBTRACT;
+import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_EQUAL;
+import static jbLPC.compiler.C_OpCode.OP_GREATER;
+import static jbLPC.compiler.C_OpCode.OP_LESS;
+import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
+import static jbLPC.compiler.C_OpCode.OP_NOT;
+import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
 
-import jbLPC.compiler.LPCCompiler;
+import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.ParseRule;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.TokenType;
 
 public class BinaryParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
-  public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
+  public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     TokenType operatorType = parser.previous().type();
     ParseRule rule = parser.getRule(operatorType);
 

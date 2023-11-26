@@ -1,26 +1,26 @@
 package jbLPC.compiler;
 
-import static jbLPC.compiler.OpCode.OP_ADD;
-import static jbLPC.compiler.OpCode.OP_COMPILE;
-import static jbLPC.compiler.OpCode.OP_DIVIDE;
-import static jbLPC.compiler.OpCode.OP_FIELD;
-import static jbLPC.compiler.OpCode.OP_GET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_GET_PROP;
-import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
-import static jbLPC.compiler.OpCode.OP_INHERIT;
-import static jbLPC.compiler.OpCode.OP_METHOD;
-import static jbLPC.compiler.OpCode.OP_MULTIPLY;
-import static jbLPC.compiler.OpCode.OP_NIL;
-import static jbLPC.compiler.OpCode.OP_OBJECT;
-import static jbLPC.compiler.OpCode.OP_RETURN;
-import static jbLPC.compiler.OpCode.OP_SET_LOCAL;
-import static jbLPC.compiler.OpCode.OP_SET_PROP;
-import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
-import static jbLPC.compiler.OpCode.OP_SUBTRACT;
+import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_OBJECT;
+import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_COMPILE;
+import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_FIELD;
+import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
+//import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_INHERIT;
+import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
+import static jbLPC.compiler.C_OpCode.OP_NIL;
+import static jbLPC.compiler.C_OpCode.OP_OBJECT;
+import static jbLPC.compiler.C_OpCode.OP_RETURN;
+import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
+//import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_EOF;
 import static jbLPC.scanner.TokenType.TOKEN_EQUAL;
-import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
+//import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_INHERIT;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_MINUS_EQUAL;
@@ -37,28 +37,27 @@ import java.util.Map;
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
-import jbLPC.util.Props;
 
-public class LPCObjectCompiler extends LPCCompiler {
-  public static Map<Path, C_LPCObject> compiledObjects = new HashMap<>();
+public class C_ObjectCompiler extends C_Compiler {
+  public static Map<Path, C_Compilation> compiledObjects = new HashMap<>();
   
-  //compile(String, String)
-  public C_LPCObject compile(Path path, String prefix, String source) {
-    if (LPCObjectCompiler.compiledObjects.containsKey(path))
-      return LPCObjectCompiler.compiledObjects.get(path);
+  //compile(Path, String, String)
+  public C_Compilation compile(Path path, String prefix, String source) {
+    if (C_ObjectCompiler.compiledObjects.containsKey(path))
+      return C_ObjectCompiler.compiledObjects.get(path);
 
     parser = new Parser(this, source);
-    currScope = new Scope(
+    currScope = new C_Scope(
       null, //enclosing Scope
-      new C_LPCObject(prefix) //compilation
+      new C_Compilation(prefix, TYPE_OBJECT) //compilation
     );
 
     Debugger.instance().printProgress("Compiling LPCObject '" + prefix + "'");
 
-    int index = makeConstant(prefix);
+    int index = emitConstant(prefix);
 
-    emitOpCode(OP_OBJECT);
-    emitArgCode(index);
+    emitInstruction(OP_OBJECT);
+    emitInstruction(index);
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -75,32 +74,31 @@ public class LPCObjectCompiler extends LPCCompiler {
       return null;
 
     //end compilation
-    emitOpCode(OP_RETURN);
+    emitInstruction(OP_RETURN);
 
-    if (debugPrintComp)
-      Debugger.instance().disassembleScope(currScope);
+    Debugger.instance().traceCompilation(currScope);
 
-    C_LPCObject compiledObject = (C_LPCObject)currScope.compilation();
+    C_Compilation compiledObject = currScope.compilation();
     
     //store this compilation to avoid future recompilation
-    LPCObjectCompiler.compiledObjects.put(path, compiledObject);
+    C_ObjectCompiler.compiledObjects.put(path, compiledObject);
 
     return compiledObject;
   }
 
   //fieldDeclaration()
   private void fieldDeclaration() {
-	parseVariable("Expect field name.");
+	  parseVariable("Expect field name.");
 	
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
-      emitOpCode(OP_NIL);
+      emitInstruction(OP_NIL);
 
     defineVariable(index);
 
-    emitOpCode(OP_FIELD);
-    emitArgCode(index);
+    emitInstruction(OP_FIELD);
+    emitInstruction(index);
 
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
@@ -117,7 +115,7 @@ public class LPCObjectCompiler extends LPCCompiler {
   protected void inherit() {
     parser.consume(TOKEN_STRING, "Expect inherited object name.");
     
-    int index = stringConstant(parser.previous());
+    int index = emitConstant(parser.previous());
 
     parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
 
@@ -141,17 +139,12 @@ public class LPCObjectCompiler extends LPCCompiler {
 
 //    namedVariable(classToken, false);
       
-    emitOpCode(OP_COMPILE);
-    emitArgCode(index);
+    emitInstruction(OP_COMPILE);
+    emitInstruction(index);
 
-    emitOpCode(OP_INHERIT);
+    emitInstruction(OP_INHERIT);
 
 //    currentClass.setHasSuperclass(true);
-  }
-
-  //objectConstant(Object)
-  public int objectConstant(Object object) {
-    return makeConstant(object);
   }
 
   //namedVariable(Token, boolean)
@@ -159,22 +152,19 @@ public class LPCObjectCompiler extends LPCCompiler {
   //given Token's lexeme, onto the vStack.
   @Override
   public void namedVariable(Token token, boolean canAssign) {
-    OpCode getOp;
-    OpCode setOp;
+    C_OpCode getOp;
+    C_OpCode setOp;
 
-    int arg = resolveLocal(currScope, token); //index of local var, or -1
+    int index = resolveLocal(currScope, token);
 
-    if (arg != -1) { //local variable
+    if (index != -1) { //local variable
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
-//    } else if ((arg = resolveUpvalue(currScope, token)) != -1) { //upvalue
+//    } else if ((index = resolveUpvalue(currScope, token)) != -1) { //upvalue
 //      getOp = OP_GET_UPVAL;
 //      setOp = OP_SET_UPVAL;
     } else { //field
-      emitOpCode(OP_GET_LOCAL);
-      emitArgCode(0); //correct way to do this?
-
-      arg = identifierConstant(token);
+      index = emitConstant(token);
 
       getOp = OP_GET_PROP;
       setOp = OP_SET_PROP;
@@ -183,19 +173,19 @@ public class LPCObjectCompiler extends LPCCompiler {
     if (canAssign && parser.match(TOKEN_EQUAL)) { //assignment
       expression();
 
-      emitOpCode(setOp);
-      emitArgCode(arg);
+      emitInstruction(setOp);
+      emitInstruction(index);
     } else if (canAssign && parser.match(TOKEN_MINUS_EQUAL))
-      compoundAssignment(getOp, setOp, OP_SUBTRACT, arg);
+      compoundAssignment(getOp, setOp, OP_SUBTRACT, index);
     else if (canAssign && parser.match(TOKEN_PLUS_EQUAL))
-      compoundAssignment(getOp, setOp, OP_ADD, arg);
+      compoundAssignment(getOp, setOp, OP_ADD, index);
     else if (canAssign && parser.match(TOKEN_SLASH_EQUAL))
-      compoundAssignment(getOp, setOp, OP_DIVIDE, arg);
+      compoundAssignment(getOp, setOp, OP_DIVIDE, index);
     else if (canAssign && parser.match(TOKEN_STAR_EQUAL))
-      compoundAssignment(getOp, setOp, OP_MULTIPLY, arg);
+      compoundAssignment(getOp, setOp, OP_MULTIPLY, index);
     else { //retrieval
-      emitOpCode(getOp);
-      emitArgCode(arg);
+      emitInstruction(getOp);
+      emitInstruction(index);
     }
   }
 

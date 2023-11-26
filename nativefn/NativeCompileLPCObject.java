@@ -1,6 +1,6 @@
 package jbLPC.nativefn;
 
-import jbLPC.compiler.Compilation;
+import jbLPC.compiler.C_Compilation;
 import jbLPC.vm.VM;
 
 public class NativeCompileLPCObject extends NativeFn {
@@ -13,8 +13,8 @@ public class NativeCompileLPCObject extends NativeFn {
   @Override
   public Object execute(Object[] args) {
     String path = (String)args[0]; //object path
-    Compilation compilation = vm.compilation(path);
+    C_Compilation c_Compilation = vm.c_Compilation(path);
 
-    return compilation;
+    return c_Compilation;
   }
 }

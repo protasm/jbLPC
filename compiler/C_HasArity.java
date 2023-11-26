@@ -1,5 +1,5 @@
 package jbLPC.compiler;
 
-public interface HasArity {
+public interface C_HasArity {
   public int arity();
 }

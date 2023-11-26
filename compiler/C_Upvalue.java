@@ -1,11 +1,11 @@
 package jbLPC.compiler;
 
-public class CompilerUpvalue {
+public class C_Upvalue {
   private int index;
   private boolean isLocal;
 
-  //Upvalue(int, boolean)
-  public CompilerUpvalue(int index, boolean isLocal) {
+  //C_Upvalue(int, boolean)
+  public C_Upvalue(int index, boolean isLocal) {
     this.index = index;
     this.isLocal = isLocal;
   }

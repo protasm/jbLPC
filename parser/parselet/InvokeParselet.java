@@ -1,16 +1,16 @@
 package jbLPC.parser.parselet;
 
-import static jbLPC.compiler.OpCode.OP_INVOKE;
+import static jbLPC.compiler.C_OpCode.OP_INVOKE;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 
 import jbLPC.compiler.Instruction;
-import jbLPC.compiler.LPCCompiler;
+import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
 public class InvokeParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
-  public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
+  public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     parser.consume(TOKEN_IDENTIFIER, "Expect method name after '->'.");
 
     //method name

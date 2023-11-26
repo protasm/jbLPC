@@ -1,17 +1,18 @@
 package jbLPC.parser.parselet;
 
-import static jbLPC.compiler.OpCode.OP_CONST;
+import static jbLPC.compiler.C_OpCode.OP_CONST;
 
-import jbLPC.compiler.Instruction;
-import jbLPC.compiler.LPCCompiler;
+import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
 public class NumberParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
-  public void parse(Parser parser, LPCCompiler compiler, boolean canAssign) {
+  public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     Object number = parser.previous().literal();
-    Instruction instr = new Instruction(OP_CONST, number);
 
-    compiler.currInstructions().add(instr);
+    int index = compiler.emitConstant(number);
+    
+    compiler.emitInstruction(OP_CONST);
+    compiler.emitInstruction(index);
   }
 }

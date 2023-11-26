@@ -1,9 +1,9 @@
 package jbLPC.nativefn;
 
-import jbLPC.compiler.HasArity;
+import jbLPC.compiler.C_HasArity;
 import jbLPC.vm.VM;
 
-public abstract class NativeFn implements HasArity {
+public abstract class NativeFn implements C_HasArity {
   protected VM vm;
   protected String fnName;
   protected int arity = 0;

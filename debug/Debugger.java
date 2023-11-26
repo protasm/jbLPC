@@ -5,9 +5,9 @@ import java.util.Map;
 import java.util.Stack;
 
 import jbLPC.compiler.C_Function;
-import jbLPC.compiler.Compilation;
-import jbLPC.compiler.Instruction;
-import jbLPC.compiler.Scope;
+import jbLPC.compiler.C_Compilation;
+import jbLPC.compiler.C_OpCode;
+import jbLPC.compiler.C_Scope;
 import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Prefs;
 
@@ -34,8 +34,6 @@ public class Debugger {
     return _instance;
   }
   
-  private static int lastLine = 0;
-
   //printBanner(String)
   public void printBanner(String text) {
     System.out.print("\n");
@@ -60,39 +58,37 @@ public class Debugger {
     System.out.println((source.length() == 0) ? "[ no source ]" : source);
   }
 
-  //traceCompilation(Scope)
-  public void traceCompilation(Scope scope) {
-	if (!Prefs.instance().getBoolean("comp")) return;
+  //traceCompilation(C_Scope)
+  public void traceCompilation(C_Scope cScope) {
+	  if (!Prefs.instance().getBoolean("comp")) return;
 	
-	Compilation compilation = scope.compilation();
+	  C_Compilation cCompilation = cScope.compilation();
 
-    printBanner(compilation.toString());
+    printBanner(cCompilation.toString());
 
     //codes
     if (Prefs.instance().getBoolean("codes")) {
       System.out.print("Codes: ");
       System.out.print(COLOR_MAGENTA);;
-      System.out.print(prettyList(compilation.instructions()));
+      System.out.print(prettyList(cCompilation.instrList().instructions()));
       System.out.println(COLOR_RESET);
     }
 
     //locals
     if (Prefs.instance().getBoolean("locals")) {
       System.out.print("Locals: ");
-      System.out.println(prettyList(scope.locals()));
+      System.out.println(prettyList(cScope.locals()));
     }
 
 //    if (Prefs.instance().getBoolean("upvals"))
 //      System.out.println("Upvalues: " + scope.upvalues());
 
-    for (Instruction instr : compilation.instructions())
+    for (Instruction instr : cCompilation.instrList().instructions())
       disassembleInstruction(instr);
-
-    lastLine = 0;
   }
 
-  //traceExecution(Instruction, Map<String, Object>, Stack<Object>)
-  public void traceExecution(Instruction instr, Map<String, Object> globals, Stack<Object> vStack) {
+  //traceExecution(OpCode, Map<String, Object>, Stack<Object>)
+  public void traceExecution(C_OpCode cOpCode, Map<String, Object> globals, Stack<Object> vStack) {
     if (!Prefs.instance().getBoolean("exec")) return;
 
     System.out.print("\n");
@@ -122,14 +118,14 @@ public class Debugger {
     }
 
     //instruction
-    disassembleInstruction(instr);
+    disassembleInstruction(cOpCode);
   }
 
-  //disassembleInstruction(Instruction)
-  public void disassembleInstruction(Instruction instr) {
+  //disassembleInstruction(OpCode)
+  public void disassembleInstruction(C_OpCode cOpCode) {
     //OpCode offset
 //    System.out.print(String.format("%04d", offset));
-	int line = instr.line();
+//	  int line = instr.line();
 	    
     System.out.print(COLOR_YELLOW);
 
@@ -139,35 +135,33 @@ public class Debugger {
     else
       System.out.print(String.format("%4d ", line));
     
-    lastLine = line;
-
     //rawcode
     if (Prefs.instance().getBoolean("rawcode")) {
       System.out.print("(");
       System.out.print(COLOR_MAGENTA);
-      System.out.print(String.format("%02d", instr.opCode().code()));
+      System.out.print(String.format("%02d", cOpCode.code()));
       System.out.print(COLOR_YELLOW);
       System.out.print(") ");
     }
 
-    printOpCode(instr);
+    printOpCode(cOpCode);
 
-    switch (instr.opCode().type()) {
+    switch (cOpCode.type()) {
       case TYPE_CLOSURE:
-        closureInstruction(instr); break;
+        closureInstruction(cOpCode); break;
       case TYPE_CONST:
-        constantInstruction(instr); break;
+        constantInstruction(cOpCode); break;
       case TYPE_INVOKE:
-          invokeInstruction(instr); break;
+          invokeInstruction(cOpCode); break;
       case TYPE_JUMP:
-          jumpInstruction(instr, 1); break;
+          jumpInstruction(cOpCode, 1); break;
       case TYPE_OPERAND:
-        operandInstruction(instr); break;
+        operandInstruction(cOpCode); break;
       case TYPE_SIMPLE:
-          simpleInstruction(instr); break;
+          simpleInstruction(cOpCode); break;
       default:
         System.out.print("Unknown opcode: ");
-          printOpCode(instr, true);
+          printOpCode(cOpCode, true);
         
         break;
     }
@@ -175,9 +169,9 @@ public class Debugger {
 	System.out.print(COLOR_RESET);
   }
 
-  //closureInstruction(Instruction)
-  private void closureInstruction(Instruction instr) {
-	C_Function function = (C_Function)instr.operands()[0];
+  //closureInstruction(C_OpCode)
+  private void closureInstruction(C_OpCode cOpCode) {
+	  C_Function function = (C_Function)instr.operands()[0];
 
     System.out.println(function);
 
@@ -192,8 +186,8 @@ public class Debugger {
 //    }
   }
 
-  //constantInstruction(Instruction)
-  private void constantInstruction(Instruction instr) {
+  //constantInstruction(C_OpCode)
+  private void constantInstruction(C_OpCode cOpCode) {
     Object constant = instr.operands()[0];
 
     System.out.print(COLOR_MAGENTA);
@@ -204,8 +198,8 @@ public class Debugger {
     System.out.print(COLOR_YELLOW);
   }
 
-  //invokeInstruction(Instruction)
-  private void invokeInstruction(Instruction instr) {
+  //invokeInstruction(C_OpCode)
+  private void invokeInstruction(C_OpCode cOpCode) {
     String identifier = (String)instr.operands()[0]; //method name
     int argCount = (int)instr.operands()[1];
 
@@ -214,8 +208,8 @@ public class Debugger {
     System.out.println(String.format(" (%d args)\n", argCount));
   }
 
-  //jumpInstruction(Instruction, int)
-  private void jumpInstruction(Instruction instr, int sign) {
+  //jumpInstruction(C_OpCode, int)
+  private void jumpInstruction(C_OpCode cOpCode, int sign) {
 //	int offset = (int)instr.operands()[0];
 
     System.out.println("TODO: finish jumpInstruction in Debugger class!");
@@ -223,24 +217,24 @@ public class Debugger {
 //      instr.opCode(), offset, offset + 3 + (sign * operand)));
   }
   
-  //operandInstruction(Instruction)
-  private void operandInstruction(Instruction instr) {
+  //operandInstruction(C_OpCode)
+  private void operandInstruction(C_OpCode cOpCode) {
     System.out.println("TODO: finish operandInstruction in Debugger class!");
   }
 
-  //simpleInstruction(Instruction)
-  private void simpleInstruction(Instruction instr) {
+  //simpleInstruction(C_OpCode)
+  private void simpleInstruction(C_OpCode cOpCode) {
    System.out.println("");
   }
   
-  //printOpCode(Instruction)
-  private void printOpCode(Instruction instr) {
-    printOpCode(instr, false);
+  //printOpCode(C_OpCode)
+  private void printOpCode(C_OpCode cOpCode) {
+    printOpCode(cOpCode, false);
   }
   
-  //printOpCode(Instruction, boolean)
-  private void printOpCode(Instruction instr, boolean EOL) {
-    System.out.print(String.format("%-16s ", instr.opCode()));
+  //printOpCode(C_OpCode, boolean)
+  private void printOpCode(C_OpCode cOpCode, boolean EOL) {
+    System.out.print(String.format("%-16s ", cOpCode));
     
     if (EOL) System.out.print("\n");
   }
