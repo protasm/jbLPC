@@ -5,9 +5,9 @@ import java.util.Map;
 
 public class LPCObject {
   private String name;
+  private LPCObject superObj;
   private Map<String, Object> fields;
   private Map<String, Closure> methods;
-  private LPCObject superObj;
 
   //LPCObject(String)
   public LPCObject(String name) {

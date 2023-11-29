@@ -4,6 +4,7 @@ import static jbLPC.compiler.C_OpCode.OP_ADD;
 import static jbLPC.compiler.C_OpCode.OP_CALL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
+import static jbLPC.compiler.C_OpCode.OP_COMPILE;
 import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
 import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
@@ -73,7 +74,7 @@ public class Debugger {
 
     return _instance;
   }
-  
+
   //printBanner(String)
   public void printBanner(String text) {
     System.out.print("\n");
@@ -100,11 +101,11 @@ public class Debugger {
 
   //disassembleScope(C_Scope)
   public void disassembleScope(C_Scope scope) {
-	  if (!Prefs.instance().getBoolean("comp")) return;
-	
-	  C_Compilation compilation = scope.compilation();
-	  C_InstrList instrList = compilation.instrList();
-	  List<Byte> codes = instrList.codes();
+	if (!Prefs.instance().getBoolean("comp")) return;
+
+	C_Compilation compilation = scope.compilation();
+	C_InstrList instrList = compilation.instrList();
+	List<Byte> codes = instrList.codes();
 
     printBanner(compilation.toString());
 
@@ -122,11 +123,11 @@ public class Debugger {
       System.out.println(scope.locals());
     }
 
-//    //upvalues
-//    if (Prefs.instance().getBoolean("upvals")) {
-//      System.out.println("Upvalues: ");
-//      System.out.println(scope.upvalues());
-//    }
+    //upvalues
+    if (Prefs.instance().getBoolean("upvals")) {
+      System.out.print("Upvalues: ");
+      System.out.println(scope.upvalues());
+    }
 
     for (int index = 0; index < codes.size();)
       index = disassembleInstruction(instrList, index);
@@ -137,7 +138,7 @@ public class Debugger {
     if (!Prefs.instance().getBoolean("exec")) return;
 
     System.out.print("\n");
-    
+
     //globals
     if (Prefs.instance().getBoolean("globals")) {
       System.out.print(Debugger.COLOR_CYAN);
@@ -161,13 +162,13 @@ public class Debugger {
     }
 
     //instruction
-    disassembleInstruction(frame.compilation().instrList(), frame.previousIndex());
+    disassembleInstruction(frame.closure().compilation().instrList(), frame.ip() - 1);
   }
 
   //disassembleInstruction(C_InstrList, int)
   public int disassembleInstruction(C_InstrList instrList, int index) {
     byte instruction = getCode(instrList, index);
-    
+
     System.out.print(COLOR_YELLOW);
 
     System.out.print(String.format("%04d", index));
@@ -195,6 +196,8 @@ public class Debugger {
         index = simpleInstruction("OP_CLOSE_UPVAL", index); break;
       case OP_CLOSURE:
         index = closureInstruction("OP_CLOSURE", instrList, index); break;
+      case OP_COMPILE:
+    	  index = constantInstruction("OP_COMPILE", instrList, index); break;
       case OP_CONSTANT:
         index = constantInstruction("OP_CONSTANT", instrList, index); break;
       case OP_DEF_GLOBAL:
@@ -212,7 +215,7 @@ public class Debugger {
       case OP_GET_LOCAL:
         index = operandInstruction("OP_GET_LOCAL", instrList, index, "offset from base"); break;
       case OP_GET_PROP:
-        index = constantInstruction("OP_GET_PROPERTY", instrList, index); break;
+        index = constantInstruction("OP_GET_PROP", instrList, index); break;
       case OP_GET_SUPER:
         index = constantInstruction("OP_GET_SUPER", instrList, index); break;
       case OP_GET_UPVAL:
@@ -265,12 +268,12 @@ public class Debugger {
         System.out.println("Unknown opcode: " + instruction);
 
         index = index + 1;
-        
+
         break;
     }
-    
+
     System.out.println(COLOR_RESET);
-    
+
     return index;
   }
 
@@ -287,27 +290,27 @@ public class Debugger {
 
     index += 2;
 
-//    for (int j = 0; j < function.upvalueCount(); j++) {
-//      boolean isLocal = (getInstr(instrList, index++) != 0);
-//      byte code = getInstr(instrList, index++);
-//
-//      System.out.print(String.format(
-//        "%04d      |                     %s %d\n",
-//        index - 2, isLocal ? "local" : "upvalue", code
-//      ));
-//    }
+    for (int j = 0; j < function.upvalueCount(); j++) {
+      boolean isLocal = (getCode(instrList, index++) != 0);
+      code = getCode(instrList, index++);
+
+      System.out.print(String.format(
+        "%04d      |                     %s %d\n",
+        index - 2, isLocal ? "local" : "upvalue", code
+      ));
+    }
 
     return index;
   }
 
   //constantInstruction(String, C_InstrList, int)
   private int constantInstruction(String name, C_InstrList instrList, int index) {
-    byte code = getCode(instrList, index + 1);
-    Object constant = getConstant(instrList, code);
+    byte operand = getCode(instrList, index + 1);
+    Object constant = getConstant(instrList, operand);
 
     System.out.print(String.format("%-16s constant: ", name));
     System.out.print(COLOR_MAGENTA);
-    System.out.print(String.format("%d ",  code));
+    System.out.print(String.format("%d ",  operand));
     System.out.print(COLOR_YELLOW);
 
     if (constant instanceof String)
@@ -320,11 +323,11 @@ public class Debugger {
 
   //invokeInstruction(String, C_InstrList, int)
   private int invokeInstruction(String name, C_InstrList instrList, int index) {
-    byte code = getCode(instrList, index + 1);
+    byte operand = getCode(instrList, index + 1);
     byte argCount = getCode(instrList, index + 3);
-    Object constant = getConstant(instrList, code);
+    Object constant = getConstant(instrList, operand);
 
-    System.out.print(String.format("%-16s constant: %d ", name, code));
+    System.out.print(String.format("%-16s constant: %d ", name, operand));
 
     if (constant instanceof String)
       System.out.print("(\"" + constant + "\")");
@@ -345,11 +348,11 @@ public class Debugger {
 
   //operandInstruction(String, C_InstrList, int, String)
   private int operandInstruction(String name, C_InstrList instrList, int index, String hint) {
-    byte code = getCode(instrList, index + 1);
+    byte operand = getCode(instrList, index + 1);
 
     System.out.print(String.format("%-16s operand: ", name));
     System.out.print(COLOR_MAGENTA);
-    System.out.print(String.format("%d ", code));
+    System.out.print(String.format("%d ", operand));
     System.out.print(COLOR_YELLOW);
     System.out.print("(" + hint + ")");
 
@@ -358,19 +361,19 @@ public class Debugger {
 
   //jumpInstruction(String, int, C_InstrList, int)
   private int jumpInstruction(String name, int sign, C_InstrList instrList, int index) {
-    byte code = getCode(instrList, index);
+    byte operand = getCode(instrList, index);
 
     System.out.print(String.format("%-16s %4d -> %d",
-      name, index, index + 3 + (sign * code)));
+      name, index, index + 3 + (sign * operand)));
 
-    return index + 3;
+    return index + 2;
   }
 
   //getCode(C_InstrList, int)
   private byte getCode(C_InstrList instrList, int index) {
     return instrList.codes().get(index);
   }
-  
+
   //getConstant(C_InstrList, int)
   private Object getConstant(C_InstrList instrList, int index) {
     return instrList.constants().get(index);

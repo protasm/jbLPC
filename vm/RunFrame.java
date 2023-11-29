@@ -1,25 +1,28 @@
 package jbLPC.vm;
 
-import java.util.ListIterator;
-
 import jbLPC.compiler.C_Compilation;
 
-public class RunFrame implements ListIterator<Byte> {
-  private C_Compilation compilation;
+public class RunFrame {
+  private Closure closure;
   private int base; //index of bottom-most vStack value in this frame
-  ListIterator<Byte> iterator;
+  private int ip; //instruction pointer
 
   //RunFrame(Compilation, int)
   RunFrame(C_Compilation compilation, int base) {
-    this.compilation = compilation;
-    this.base = base;
-
-    iterator = compilation.instrList().codes().listIterator();
+    this(new Closure(compilation), base);
+  }
+  
+  //RunFrame(Closure, int)
+  RunFrame(Closure closure, int base) {
+    this.closure = closure;
+	this.base = base;
+	  
+	ip = 0;
   }
 
-  //compilation()
-  public C_Compilation compilation() {
-    return compilation;
+  //closure()
+  public Closure closure() {
+    return closure;
   }
 
   //base()
@@ -27,59 +30,29 @@ public class RunFrame implements ListIterator<Byte> {
     return base;
   }
 
-  //hasNext()
-  public boolean hasNext() {
-    return iterator.hasNext();
-  }
-
-  //next()
-  public Byte next() {
-    return iterator.next();
+  //ip()
+  public int ip() {
+	  return ip;
   }
   
-  //hasPrevious()
-  public boolean hasPrevious() {
-    return iterator.hasPrevious();
+  //nextInstr()
+  public Byte nextInstr() {
+    return closure.compilation().instrList().codes().get(ip++);
   }
   
-  //previous()
-  public Byte previous() {
-    return iterator.previous();
+  //getConstant(byte)
+  public Object getConstant(byte index) {
+	  return closure.compilation().instrList().constants().get(index);
   }
-
+  
+  //setIP(int)
+  public void setIP(int ip) {
+	  this.ip = ip;
+  }
+  
   //toString()
   @Override
   public String toString() {
-    return "@Frame: " + compilation + "@";
-  }
-
- 
-  @Override
-  public int nextIndex() {
-    return iterator.nextIndex();
-  }
-
-  
-  @Override
-  public int previousIndex() {
-    return iterator.previousIndex();
-  }
-
-  
-  @Override
-  public void remove() {
-    iterator.remove();
-  }
-
-  
-  @Override
-  public void set(Byte e) {
-    iterator.set(e);
-  }
-
-  
-  @Override
-  public void add(Byte e) {
-    iterator.add(e);
+    return "@RunFrame: " + closure + "@";
   }
 }

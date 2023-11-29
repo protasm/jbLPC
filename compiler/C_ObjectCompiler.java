@@ -7,15 +7,16 @@ import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
-//import static jbLPC.compiler.OpCode.OP_GET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_INHERIT;
+import static jbLPC.compiler.C_OpCode.OP_METHOD;
 import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
 import static jbLPC.compiler.C_OpCode.OP_NIL;
 import static jbLPC.compiler.C_OpCode.OP_OBJECT;
 import static jbLPC.compiler.C_OpCode.OP_RETURN;
 import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
-//import static jbLPC.compiler.OpCode.OP_SET_UPVAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_EOF;
@@ -86,10 +87,8 @@ public class C_ObjectCompiler extends C_Compiler {
     return compiledObject;
   }
 
-  //fieldDeclaration()
-  private void fieldDeclaration() {
-	  parseVariable("Expect field name.");
-	
+  //fieldDeclaration(int)
+  private void fieldDeclaration(int index) {
     if (parser.match(TOKEN_EQUAL))
       expression();
     else
@@ -103,12 +102,21 @@ public class C_ObjectCompiler extends C_Compiler {
     //handle variable declarations of the form:
     //var x = 99, y, z = "hello";
     if (parser.match(TOKEN_COMMA)) {
-      fieldDeclaration();
+      index = parseVariable("Expect field name.");
+      
+      fieldDeclaration(index);
 
       return;
     }
 
     parser.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration(s).");
+  }
+
+  protected void methodDeclaration(int index) {
+	  funDeclaration(index);
+	  
+	  emitCode(OP_METHOD);
+	  emitCode(index);
   }
 
   //inherit()
@@ -152,19 +160,18 @@ public class C_ObjectCompiler extends C_Compiler {
   //given Token's lexeme, onto the vStack.
   @Override
   public void namedVariable(Token token, boolean canAssign) {
-    C_OpCode getOp;
-    C_OpCode setOp;
+    byte getOp, setOp;
 
     int index = resolveLocal(currScope, token);
 
     if (index != -1) { //local variable
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
-//    } else if ((index = resolveUpvalue(currScope, token)) != -1) { //upvalue
-//      getOp = OP_GET_UPVAL;
-//      setOp = OP_SET_UPVAL;
+    } else if ((index = resolveUpvalue(currScope, token)) != -1) { //upvalue
+      getOp = OP_GET_UPVAL;
+      setOp = OP_SET_UPVAL;
     } else { //field
-      index = emitConstant(token);
+      index = emitConstant(token.lexeme());
 
       getOp = OP_GET_PROP;
       setOp = OP_SET_PROP;
@@ -192,12 +199,12 @@ public class C_ObjectCompiler extends C_Compiler {
   //typedDeclaration()
   @Override
   protected void typedDeclaration() {
+	int index = parseVariable("Expect field or method name.");
+	
     if (!parser.check(TOKEN_LEFT_PAREN))
-      fieldDeclaration();
+      fieldDeclaration(index);
     else {
-      funDeclaration();
-      
-      //emit OP_METHOD instruction
+      methodDeclaration(index);
     }
   }
 }
