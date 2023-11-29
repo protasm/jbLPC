@@ -9,6 +9,7 @@ import static jbLPC.compiler.C_OpCode.OP_COMPILE;
 import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
 import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_END;
 import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
@@ -237,6 +238,25 @@ public class VM {
           break;
         } //OP_DIVIDE
         
+        case OP_END: {
+//          vStack.pop();
+
+          //pop the RunFrame for the ending compilation
+          fStack.pop();
+
+          if (fStack.isEmpty()) //entire program finished
+            //exit the bytecode dispatch loop
+            return InterpretResult.INTERPRET_OK;
+
+          //pop vStack back to expiring RunFrame's base
+//          while (vStack.size() > frame.base())
+//            vStack.pop();
+
+          frame = fStack.peek();
+
+          break;
+        } //OP_END
+        
         case OP_EQUAL: {
           equate();
 
@@ -380,8 +400,8 @@ public class VM {
         } //OP_INHERIT
         
         case OP_INVOKE: {
-          byte op1 = frame.nextInstr();
-          int op2 = frame.nextInstr(); //arg count
+          byte op1 = frame.nextInstr(); //method name
+          byte op2 = frame.nextInstr(); //arg count
           Object constant = frame.getConstant(op1);
 
           if (!invoke((String)constant, op2))
@@ -502,7 +522,7 @@ public class VM {
           fStack.pop();
 
           if (fStack.isEmpty()) { //entire program finished
-//            vStack.pop();
+            vStack.pop();
 
             //exit the bytecode dispatch loop
             return InterpretResult.INTERPRET_OK;
@@ -704,7 +724,7 @@ public class VM {
     return true;
   }
 
-  //frame(Compilation)
+  //frame(C_Compilation)
   private void frame(C_Compilation compilation) {
 	  int base = vStack.size() - 1;
 
@@ -793,15 +813,15 @@ public class VM {
   //closeUpvalues(int)
   void closeUpvalues(int last) {
     while (openUpvalues != null && openUpvalues.location() >= last) {
-      Upvalue compilerUpvalue = openUpvalues;
+      Upvalue upvalue = openUpvalues;
 
-      compilerUpvalue.setClosedValue(vStack.get(compilerUpvalue.location()));
-      compilerUpvalue.setLocation(-1);
+      upvalue.setClosedValue(vStack.get(upvalue.location()));
+      upvalue.setLocation(-1);
 
       //after upvalue is closed, reset head of linked list
       //to next upvalue
-      openUpvalues = compilerUpvalue.next();
-      compilerUpvalue.setNext(null);
+      openUpvalues = upvalue.next();
+      upvalue.setNext(null);
     }
   }
 

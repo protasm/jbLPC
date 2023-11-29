@@ -13,14 +13,15 @@ public class InvokeParselet implements Parselet {
     parser.consume(TOKEN_IDENTIFIER, "Expect method name after '->'.");
 
     //method name
-    int index = compiler.emitConstant(parser.previous().lexeme());
+    int op1 = compiler.emitConstant(parser.previous().lexeme());
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
 
-    int argCount = compiler.argumentList();
+    //arg count
+    int op2 = compiler.argumentList();
 
     compiler.emitCode(OP_INVOKE);
-    compiler.emitCode(index);
-    compiler.emitCode(argCount);
+    compiler.emitCode(op1);
+    compiler.emitCode(op2);
   }
 }

@@ -4,6 +4,7 @@ import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_OBJECT;
 import static jbLPC.compiler.C_OpCode.OP_ADD;
 import static jbLPC.compiler.C_OpCode.OP_COMPILE;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_END;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
@@ -75,7 +76,7 @@ public class C_ObjectCompiler extends C_Compiler {
       return null;
 
     //end compilation
-    emitCode(OP_RETURN);
+    emitCode(OP_END);
 
     Debugger.instance().disassembleScope(currScope);
 
@@ -123,7 +124,7 @@ public class C_ObjectCompiler extends C_Compiler {
   protected void inherit() {
     parser.consume(TOKEN_STRING, "Expect inherited object name.");
     
-    int index = emitConstant(parser.previous());
+    int index = emitConstant(parser.previous().literal());
 
     parser.consume(TOKEN_SEMICOLON, "Expect semicolon after inherited object name.");
 

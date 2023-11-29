@@ -8,6 +8,7 @@ import static jbLPC.compiler.C_OpCode.OP_COMPILE;
 import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
 import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
+import static jbLPC.compiler.C_OpCode.OP_END;
 import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
@@ -204,6 +205,8 @@ public class Debugger {
         index = constantInstruction("OP_DEF_GLOBAL", instrList, index); break;
       case OP_DIVIDE:
         index = simpleInstruction("OP_DIVIDE", index); break;
+      case OP_END:
+        index = simpleInstruction("OP_END", index); break;
       case OP_EQUAL:
         index = simpleInstruction("OP_EQUAL", index); break;
       case OP_FALSE:
