@@ -6,12 +6,12 @@ import java.util.Stack;
 
 import jbLPC.scanner.Token;
 
-import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_FUNCTION;
+import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_OBJECT;
 
 public class C_Scope {
   private C_Scope enclosing;
   private C_Compilation compilation;
-  private Stack<C_Local> locals;
+  private Stack<C_Local> locals; //simulate runtime vStack
   private List<C_Upvalue> upvalues;
   private int depth; //the number of surrounding blocks
 
@@ -24,13 +24,13 @@ public class C_Scope {
     upvalues = new ArrayList<>();
     depth = 0;
 
-    //Block out stack slot zero for the compilation being called.
+    //Block out stack slot zero for the compilation being compiled.
     Token token;
 
-    if (compilation.type() == TYPE_FUNCTION)
-      token = new Token(null, "", null, -1);
-    else
+    if (compilation.type() == TYPE_OBJECT)
       token = new Token(null, "this", null, -1);
+    else
+      token = new Token(null, "", null, -1);
 
     locals.push(new C_Local(token, 0));
   }
