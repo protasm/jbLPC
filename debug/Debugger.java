@@ -326,20 +326,20 @@ public class Debugger {
 
   //invokeInstruction(String, C_InstrList, int)
   private int invokeInstruction(String name, C_InstrList instrList, int index) {
-    byte operand = getCode(instrList, index + 1);
-    byte argCount = getCode(instrList, index + 3);
-    Object constant = getConstant(instrList, operand);
+    byte op1 = getCode(instrList, index + 1);
+    byte op2 = getCode(instrList, index + 2); //arg count
+    Object constant = getConstant(instrList, op1);
 
-    System.out.print(String.format("%-16s constant: %d ", name, operand));
+    System.out.print(String.format("%-16s constant: %d ", name, op1));
 
     if (constant instanceof String)
       System.out.print("(\"" + constant + "\")");
     else
       System.out.print("(" + constant + ")");
 
-    System.out.print(String.format(" (%d args)", argCount));
+    System.out.print(String.format(" (%d args)", op2));
 
-    return index + 4;
+    return index + 3;
   }
 
   //simpleInstruction(String, int)

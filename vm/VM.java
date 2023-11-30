@@ -239,18 +239,12 @@ public class VM {
         } //OP_DIVIDE
         
         case OP_END: {
-//          vStack.pop();
-
           //pop the RunFrame for the ending compilation
           fStack.pop();
 
           if (fStack.isEmpty()) //entire program finished
             //exit the bytecode dispatch loop
             return InterpretResult.INTERPRET_OK;
-
-          //pop vStack back to expiring RunFrame's base
-//          while (vStack.size() > frame.base())
-//            vStack.pop();
 
           frame = fStack.peek();
 
@@ -521,12 +515,12 @@ public class VM {
           //pop the RunFrame for the returning function
           fStack.pop();
 
-          if (fStack.isEmpty()) { //entire program finished
-            vStack.pop();
-
-            //exit the bytecode dispatch loop
-            return InterpretResult.INTERPRET_OK;
-          }
+//          if (fStack.isEmpty()) { //entire program finished
+//            vStack.pop();
+//
+//            //exit the bytecode dispatch loop
+//            return InterpretResult.INTERPRET_OK;
+//          }
 
           //pop the vStack back to expiring RunFrame's base
           while (vStack.size() > frame.base())
