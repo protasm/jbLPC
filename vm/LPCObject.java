@@ -41,7 +41,7 @@ public class LPCObject {
   public void inherit(LPCObject superObj) {
     this.superObj = superObj;
     this.fields = superObj.fields();
-    this.methods = superObj.methods;
+    this.methods = superObj.methods();
   }
 
   //toString()

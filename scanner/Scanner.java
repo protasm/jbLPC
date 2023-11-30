@@ -42,7 +42,7 @@ import static jbLPC.scanner.TokenType.TOKEN_STAR;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_STRING;
 import static jbLPC.scanner.TokenType.TOKEN_SUPER;
-import static jbLPC.scanner.TokenType.TOKEN_THIS;
+//import static jbLPC.scanner.TokenType.TOKEN_THIS;
 import static jbLPC.scanner.TokenType.TOKEN_TRUE;
 import static jbLPC.scanner.TokenType.TOKEN_VECTOR;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
@@ -94,7 +94,7 @@ public class Scanner implements Iterator<Token> {
         put("inherit", TOKEN_INHERIT);
         put("nil", TOKEN_NIL);
         put("return", TOKEN_RETURN);
-        put("this", TOKEN_THIS);
+//        put("this", TOKEN_THIS);
         put("true", TOKEN_TRUE);
         put("while", TOKEN_WHILE);
       }

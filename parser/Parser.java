@@ -268,7 +268,7 @@ public class Parser {
     register(TOKEN_DBL_PIPE,      null,                   new OrParselet(),     PREC_OR);
     register(TOKEN_RETURN,        null,                   null,                 PREC_NONE);
     register(TOKEN_SUPER,         new SuperParselet(),    null,                 PREC_NONE);
-    register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
+//    register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
     register(TOKEN_TRUE,          new LiteralParselet(),  null,                 PREC_NONE);
     register(TOKEN_PRIMITIVE,     null,                   null,                 PREC_NONE);
     register(TOKEN_WHILE,         null,                   null,                 PREC_NONE);

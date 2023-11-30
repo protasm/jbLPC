@@ -745,7 +745,7 @@ public class VM {
   //invokeFromObject(LPCObject, String, int)
   //Invoking From Object means checking that the LPCObject contains
   //a method with the given name, wrapping that method in a new Closure,
-  //and passing the Closure to call with its arg count.
+  //and framing the new Closure with its argCount.
   private boolean invokeFromObject(LPCObject lpcObject, String methodName, int argCount) {
     if (!(lpcObject.methods().containsKey(methodName))) {
       runtimeError("Undefined method '" + methodName + "'.");
