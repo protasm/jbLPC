@@ -6,7 +6,6 @@ import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
 import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
-import static jbLPC.compiler.C_OpCode.OP_END;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_UPVAL;
@@ -91,8 +90,8 @@ public class C_Compiler {
     if (parser.hadError())
       return null;
 
-//    emitCode(OP_NIL); //return value; always null for a Script
-    emitCode(OP_END);
+    emitCode(OP_NIL); //return value; always null for a Script
+    emitCode(OP_RETURN);
 
     Debugger.instance().disassembleScope(currScope);
 

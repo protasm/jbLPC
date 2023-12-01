@@ -9,7 +9,6 @@ import static jbLPC.compiler.C_OpCode.OP_COMPILE;
 import static jbLPC.compiler.C_OpCode.OP_CONSTANT;
 import static jbLPC.compiler.C_OpCode.OP_DEF_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
-import static jbLPC.compiler.C_OpCode.OP_END;
 import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
@@ -85,6 +84,8 @@ public class VM {
   private Stack<Object> vStack; //Value stack
   private Stack<RunFrame> fStack; //RunFrame stack
   private Upvalue openUpvalues; //linked list
+  
+  public boolean execCompilation;
 
   //VM()
   public VM() {
@@ -110,8 +111,12 @@ public class VM {
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
     Debugger.instance().printProgress("Executing script '" + name + "'");
+    
+    vStack.push(cScript);
 
     frame(cScript);
+    
+//    execCompilation = true;
 
     return run();
   }
@@ -124,19 +129,16 @@ public class VM {
     for (;;) {
       //Prior pass may have left a "raw" compilation on
       //the vStack; if so, frame it up to be run immediately.
-      if (
-        !vStack.isEmpty() &&
-        vStack.peek() instanceof C_Compilation
-      ) {
+      if (execCompilation) {
         C_Compilation compilation = (C_Compilation)vStack.peek();
 
         Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
 
     	  frame(compilation);
+    	  
+    	  execCompilation = false;
 
     	  frame = fStack.peek();
-
-    	  vStack.pop();
 
     	  continue;
       }
@@ -204,6 +206,8 @@ public class VM {
           C_Compilation c_Compilation = getCompilation((String)constant);
 
           vStack.push(c_Compilation);
+          
+          execCompilation = true;
 
           break;
       } //OP_COMPILE
@@ -237,19 +241,6 @@ public class VM {
 
           break;
         } //OP_DIVIDE
-        
-        case OP_END: {
-          //pop the RunFrame for the ending compilation
-          fStack.pop();
-
-          if (fStack.isEmpty()) //entire program finished
-            //exit the bytecode dispatch loop
-            return InterpretResult.INTERPRET_OK;
-
-          frame = fStack.peek();
-
-          break;
-        } //OP_END
         
         case OP_EQUAL: {
           equate();
@@ -337,12 +328,11 @@ public class VM {
           runtimeError("Undefined property '" + (String)constant + "'.");
 
           return InterpretResult.INTERPRET_RUNTIME_ERROR;
-        }
+        } //OP_GET_PROP
         
         case OP_GET_SUPER: {
-
           break;
-        } //OP_GET_PROP
+        } //OP_GET_SUPER
         
         case OP_GET_UPVAL: {
           byte operand = frame.nextInstr(); //upvalue slot
@@ -648,6 +638,7 @@ public class VM {
     vStack = new Stack<>();
     fStack = new Stack<>();
     openUpvalues = null;
+    execCompilation = false;
   }
 
   //runtimeError(String, String...)

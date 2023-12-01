@@ -15,6 +15,8 @@ public class NativeCompileLPCObject extends NativeFn {
     String path = (String)args[0]; //object path
     C_Compilation c_Compilation = vm.getCompilation(path);
 
+    vm.execCompilation = true;
+    
     return c_Compilation;
   }
 }

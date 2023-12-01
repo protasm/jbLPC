@@ -8,7 +8,6 @@ public final class C_OpCode {
   public static final byte OP_COMPILE       = 0x04; //const (object path)
   public static final byte OP_CONSTANT      = 0x05; //const (constant)
   public static final byte OP_DIVIDE        = 0x06; //simple
-  public static final byte OP_END           = 0x26; //simple
   public static final byte OP_EQUAL         = 0x07; //simple
   public static final byte OP_FALSE         = 0x08; //simple
   public static final byte OP_FIELD         = 0x09; //const (field name)
