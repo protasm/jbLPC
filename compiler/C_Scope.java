@@ -7,6 +7,7 @@ import java.util.Stack;
 import jbLPC.scanner.Token;
 
 import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_OBJECT;
+import static jbLPC.scanner.TokenType.TOKEN_THIS;
 
 public class C_Scope {
   private C_Scope enclosing;
@@ -28,7 +29,7 @@ public class C_Scope {
     Token token;
 
     if (compilation.type() == TYPE_OBJECT)
-      token = new Token(null, "this", null, -1);
+      token = new Token(TOKEN_THIS, "this", null, -1);
     else
       token = new Token(null, "", null, -1);
 

@@ -75,7 +75,6 @@ public class C_ObjectCompiler extends C_Compiler {
       return null;
 
     //end compilation
-    emitCode(OP_NIL);
     emitCode(OP_RETURN);
 
     Debugger.instance().disassembleScope(currScope);
@@ -176,7 +175,7 @@ public class C_ObjectCompiler extends C_Compiler {
       
       //Make sure the receiving object is loaded.
       emitCode(OP_GET_LOCAL);
-      emitCode(0x00); //resolve dynamically?
+      emitCode(0x00); //TODO: fix
 
       getOp = OP_GET_PROP;
       setOp = OP_SET_PROP;
