@@ -90,6 +90,7 @@ public class C_Compiler {
     if (parser.hadError())
       return null;
 
+    //end Script
     emitCode(OP_NIL); //return value; always null for a Script
     emitCode(OP_RETURN);
 
