@@ -12,6 +12,6 @@ public class ThisParselet implements Parselet {
 //      return;
 //    }
 
-    new VariableParselet().parse(parser, compiler, false);
+    compiler.namedVariable(compiler.syntheticToken("this"), false);
   }
 }

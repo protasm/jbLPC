@@ -37,6 +37,7 @@ import java.util.Map;
 
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
+import jbLPC.parser.parselet.ThisParselet;
 import jbLPC.scanner.Token;
 
 public class C_ObjectCompiler extends C_Compiler {
@@ -174,8 +175,7 @@ public class C_ObjectCompiler extends C_Compiler {
       index = emitConstant(token.lexeme());
       
       //Make sure the receiving object is loaded.
-      emitCode(OP_GET_LOCAL);
-      emitCode(0x00); //TODO: fix
+      new ThisParselet().parse(this.parser, this, false);
 
       getOp = OP_GET_PROP;
       setOp = OP_SET_PROP;

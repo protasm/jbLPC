@@ -17,20 +17,23 @@ public class SuperParselet implements Parselet {
 
     //parser.consume(TOKEN_DOT, "Expect '.' after 'super'.");
 
-    parser.consume(TOKEN_IDENTIFIER, "Expect inherited function name.");
+    parser.consume(TOKEN_IDENTIFIER, "Expect inherited method name.");
 
+    //inherited method name
     int index = compiler.emitConstant(parser.previous().lexeme());
 
+    //load inheriting LPC object (from locals)
     compiler.namedVariable(compiler.syntheticToken("this"), false);
 
-    parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after function name.");
+    parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
 
     int argCount = compiler.argumentList();
     
-    compiler.namedVariable(compiler.syntheticToken("super"), false);
+    //load inherited LPC object (from inheriting object properties)
+//    compiler.namedVariable(compiler.syntheticToken("super"), false);
 
     compiler.emitCode(OP_SUPER_INVOKE);
-    compiler.emitCode(index);
+    compiler.emitCode(index); //constants index
     compiler.emitCode(argCount);
   }
 }

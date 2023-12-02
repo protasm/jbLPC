@@ -50,6 +50,7 @@ import jbLPC.compiler.C_InstrList;
 import jbLPC.compiler.C_Scope;
 import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Prefs;
+import jbLPC.util.ObjStack;
 import jbLPC.vm.RunFrame;
 
 public class Debugger {
@@ -134,7 +135,7 @@ public class Debugger {
   }
 
   //traceExecution(RunFrame, Map<String, Object>, Stack<Object>)
-  public void traceExecution(RunFrame frame, Map<String, Object> globals, Stack<Object> vStack) {
+  public void traceExecution(RunFrame frame, Map<String, Object> globals, ObjStack vStack) {
     if (!Prefs.instance().getBoolean("exec")) return;
 
     System.out.print("\n");

@@ -563,17 +563,17 @@ public class C_Compiler {
 
     if (enclosing == null) return -1;
 
-    //check locals
+    //check locals for enclosing Scope
     int index = resolveLocal(enclosing, token);
 
-    if (index != -1) {
+    if (index != -1) { //mark located local captured
       enclosing.locals().get(index).setIsCaptured(true);
 
       //Return index of newly-added Upvalue.
       return addUpvalue(scope, index, true);
     }
 
-    //check upvalues
+    //check upvalues for enclosing Scope
     index = resolveUpvalue(enclosing, token);
 
     if (index != -1)
