@@ -171,11 +171,12 @@ public class C_ObjectCompiler extends C_Compiler {
     } else if ((index = resolveUpvalue(currScope, token)) != -1) { //upvalue
       getOp = OP_GET_UPVAL;
       setOp = OP_SET_UPVAL;
-    } else { //field
-      index = emitConstant(token.lexeme());
+    } else { //property
+      index = emitConstant(token.lexeme()); //property name
       
-      //Make sure the receiving object is loaded.
-      new ThisParselet().parse(this.parser, this, false);
+      //load LPC object in which property lives
+      emitCode(OP_GET_LOCAL);
+      emitCode(0x00); //Controversial
 
       getOp = OP_GET_PROP;
       setOp = OP_SET_PROP;

@@ -1,5 +1,6 @@
 package jbLPC.parser.parselet;
 
+import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_SUPER_INVOKE;
 import static jbLPC.scanner.TokenType.TOKEN_IDENTIFIER;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
@@ -23,7 +24,9 @@ public class SuperParselet implements Parselet {
     int index = compiler.emitConstant(parser.previous().lexeme());
 
     //load inheriting LPC object (from locals)
-    compiler.namedVariable(compiler.syntheticToken("this"), false);
+//    compiler.namedVariable(compiler.syntheticToken("this"), false);
+    compiler.emitCode(OP_GET_LOCAL);
+    compiler.emitCode(0x00);
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
 
