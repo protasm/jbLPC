@@ -82,6 +82,7 @@ public class VM {
   }
 
   private Map<String, Object> globals;
+  private Map<String, NativeFn> nativeFns;
   private ObjStack vStack; //Value stack
   private Stack<RunFrame> fStack; //RunFrame stack
   private Upvalue openUpvalues; //linked list
@@ -91,6 +92,7 @@ public class VM {
   //VM()
   public VM() {
     globals = new HashMap<>();
+    nativeFns = new HashMap<>();
 
     defineNativeFn("clock", new NativeClock(this, "Clock", 0));
     defineNativeFn("foo", new NativeFoo(this, "Foo", 3));
@@ -268,16 +270,26 @@ public class VM {
         
         case OP_GET_GLOBAL: {
           byte operand = frame.nextInstr(); //constants index
-          Object constant = frame.getConstant(operand); //global name
+          Object constant = frame.getConstant(operand); //global or nativeFn name
+          String name = (String)constant;
 
-          if (!globals.containsKey((String)constant))
-            return error("Undefined object '" + (String)constant + "'.");
+          if (globals.containsKey(name)) {
+            Object value = globals.get(name);
 
-          Object value = globals.get((String)constant);
+            vStack.push(value);
+            
+            break;
+          }
+          
+          if (nativeFns.containsKey(name)) {
+            Object value = nativeFns.get(name);
+            
+            vStack.push(value);
+            
+            break;
+          }
 
-          vStack.push(value);
-
-          break;
+          return error("Undefined object '" + name + "'.");
         } //OP_GET_GLOBAL
         
         case OP_GET_LOCAL: {
@@ -307,7 +319,7 @@ public class VM {
           if (lpcObject.fields().containsKey(name)) {
             Object field = lpcObject.fields().get(name);
 
-            vStack.pop(); // LPCObject
+            vStack.pop(); // LPC object
 
             vStack.push(field);
 
@@ -318,10 +330,21 @@ public class VM {
           if (lpcObject.methods().containsKey(name)) {
             Closure method = lpcObject.methods().get(name);
 
-            vStack.pop(); // LPCObject
+            vStack.pop(); // LPC object
 
             vStack.push(method);
 
+            break;
+          }
+          
+          //Finally, check native functions
+          if(nativeFns.containsKey(name)) {
+            NativeFn nativeFn = nativeFns.get(name);
+            
+            vStack.pop();
+            
+            vStack.push(nativeFn);
+            
             break;
           }
 
@@ -612,7 +635,7 @@ public class VM {
           byte op1 = frame.nextInstr(); //constants index
           byte op2 = frame.nextInstr(); //arg count
           Object constant = frame.getConstant(op1); //inherited method name
-          LPCObject lpcObject = (LPCObject)vStack.pop(); //inheriting LPC object
+          LPCObject lpcObject = (LPCObject)vStack.popMinus(op2); //inheriting LPC object
 
           if (!invokeFromObject(lpcObject.superObj(), (String)constant, op2))
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -670,7 +693,7 @@ public class VM {
 
   //defineNativeFn(String, NativeFn)
   private void defineNativeFn(String name, NativeFn nativeFn) {
-    globals.put(name, nativeFn);
+    nativeFns.put(name, nativeFn);
   }
 
   public C_Compilation getCompilation(String path) {

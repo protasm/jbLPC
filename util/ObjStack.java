@@ -20,6 +20,10 @@ public final class ObjStack {
     return values.pop();
   }
   
+  public Object popMinus(int offset) {
+    return get(size() - 1  - offset);
+  }
+  
   public Object peek() {
     return values.peek();
   }

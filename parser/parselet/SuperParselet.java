@@ -26,7 +26,7 @@ public class SuperParselet implements Parselet {
     //load inheriting LPC object (from locals)
 //    compiler.namedVariable(compiler.syntheticToken("this"), false);
     compiler.emitCode(OP_GET_LOCAL);
-    compiler.emitCode(0x00);
+    compiler.emitCode(0x00); //TODO:  reliable?
 
     parser.consume(TOKEN_LEFT_PAREN, "Expect left parentheses after method name.");
 

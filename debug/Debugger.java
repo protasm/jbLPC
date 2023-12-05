@@ -144,12 +144,7 @@ public class Debugger {
     if (Prefs.instance().getBoolean("globals")) {
       System.out.print(Debugger.COLOR_CYAN);
       System.out.print("Globals: ");
-      System.out.print(
-        globals.entrySet()
-          .stream()
-          .filter(item -> !(item.getValue() instanceof NativeFn))
-          .collect(Collectors.toList())
-      );
+      System.out.print(globals);
       System.out.print(Debugger.COLOR_RESET);
       System.out.print("\n");
     }
