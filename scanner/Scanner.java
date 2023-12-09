@@ -44,7 +44,6 @@ import static jbLPC.scanner.TokenType.TOKEN_STRING;
 import static jbLPC.scanner.TokenType.TOKEN_SUPER;
 //import static jbLPC.scanner.TokenType.TOKEN_THIS;
 import static jbLPC.scanner.TokenType.TOKEN_TRUE;
-import static jbLPC.scanner.TokenType.TOKEN_VECTOR;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import java.io.IOException;
@@ -256,21 +255,12 @@ public class Scanner implements Iterator<Token> {
     // check LPC types first
     TokenType type = lpcTypes.get(str);
 
-    if (type != null) {
-      if (ss.nextCharOnLine() == '*') {
-        type = TOKEN_VECTOR;
-
-        ss.advancePast('*');
-      }
-
-      return makeToken(type);
-    }
-
-    // check reserved words next
-    type = reservedWords.get(str);
-
-    // treat as identifier
     if (type == null)
+      // check reserved words next
+      type = reservedWords.get(str);
+
+    if (type == null)
+      // treat as identifier
       type = TOKEN_IDENTIFIER;
 
     return makeToken(type);
