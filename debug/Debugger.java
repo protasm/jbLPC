@@ -1,6 +1,7 @@
 package jbLPC.debug;
 
 import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_ARRAY;
 import static jbLPC.compiler.C_OpCode.OP_CALL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
@@ -11,6 +12,7 @@ import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
 import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
+import static jbLPC.compiler.C_OpCode.OP_GET_ELEMENT;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
@@ -41,14 +43,11 @@ import static jbLPC.compiler.C_OpCode.OP_TRUE;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Stack;
-import java.util.stream.Collectors;
 
 import jbLPC.compiler.C_Compilation;
 import jbLPC.compiler.C_Function;
 import jbLPC.compiler.C_InstrList;
 import jbLPC.compiler.C_Scope;
-import jbLPC.nativefn.NativeFn;
 import jbLPC.util.Prefs;
 import jbLPC.util.ObjStack;
 import jbLPC.vm.RunFrame;
@@ -186,6 +185,8 @@ public class Debugger {
     switch (instruction) {
       case OP_ADD:
         index = simpleInstruction("OP_ADD", index); break;
+      case OP_ARRAY:
+        index = operandInstruction("OP_ARRAY", instrList, index, "# of elems"); break;
       case OP_CALL:
         index = operandInstruction("OP_CALL", instrList, index, "# of args"); break;
       case OP_CLOSE_UPVAL:
@@ -206,6 +207,8 @@ public class Debugger {
         index = simpleInstruction("OP_FALSE", index); break;
       case OP_FIELD:
         index = constantInstruction("OP_FIELD", instrList, index); break;
+      case OP_GET_ELEMENT:
+          index = simpleInstruction("OP_GET_ELEMENT", index); break;
       case OP_GET_GLOBAL:
         index = constantInstruction("OP_GET_GLOBAL", instrList, index); break;
       case OP_GET_LOCAL:

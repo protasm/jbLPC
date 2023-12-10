@@ -6,6 +6,9 @@ import java.util.Stack;
 
 
 public final class ObjStack {
+  private static final String COLOR_RESET = "\033[0m";
+  private static final String COLOR_GREEN = "\033[32m";
+
   private Stack<Object> values;
   
   public ObjStack() {
@@ -47,13 +50,13 @@ public final class ObjStack {
   //toString()
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
+    StringBuilder sb = new StringBuilder(COLOR_RESET + "[");
     Iterator<Object> iterator = this.values.iterator();
     
     while (iterator.hasNext()) {
       Object value = iterator.next();
       
-      sb.append("[");
+      sb.append(COLOR_GREEN);
       
       if (value instanceof String) {
         sb.append("\"" + value + "\"");
@@ -61,11 +64,13 @@ public final class ObjStack {
         sb.append(value);
       }
 
-      sb.append("]");
-      
+      sb.append(COLOR_RESET);
+
       if (iterator.hasNext())
-        sb.append(" ");
+        sb.append(" | ");
     }
+    
+    sb.append("]");
     
     return sb.toString();
   }

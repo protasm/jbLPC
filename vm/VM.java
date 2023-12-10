@@ -2,6 +2,7 @@ package jbLPC.vm;
 
 import static jbLPC.compiler.C_Compilation.C_CompilationType.TYPE_SCRIPT;
 import static jbLPC.compiler.C_OpCode.OP_ADD;
+import static jbLPC.compiler.C_OpCode.OP_ARRAY;
 import static jbLPC.compiler.C_OpCode.OP_CALL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSE_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_CLOSURE;
@@ -13,6 +14,7 @@ import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_ELEMENT;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
@@ -41,6 +43,7 @@ import static jbLPC.compiler.C_OpCode.OP_SUPER_INVOKE;
 import static jbLPC.compiler.C_OpCode.OP_TRUE;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +163,18 @@ public class VM {
           break;
         } //OP_ADD
         
+        case OP_ARRAY: {
+          byte operand = frame.nextInstr(); //element count
+          List<Object> elements = new ArrayList<Object>();
+          
+          for (int i = 0; i < operand; i++)
+            elements.add(vStack.pop());
+
+          vStack.push(new LPCArray(elements.reversed()));
+
+          break;	
+        } //OP_ARRAY
+        
         case OP_CALL: {
           byte operand = frame.nextInstr(); //arg count
           Object constant = vStack.get(vStack.size() - 1 - operand); //callee
@@ -268,6 +283,39 @@ public class VM {
           break;
         } //OP_FIELD
         
+        case OP_GET_ELEMENT: {
+            Object val1 = vStack.pop(); //element index
+            Object val2 = vStack.pop(); //LPC array
+            
+            if (
+              !(val1 instanceof Double) ||
+              (Double)val1 % 1 != 0
+            ) {
+              runtimeError("Invalid array element index: " + (Double)val1);
+
+              return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            }
+
+            if (!(val2 instanceof LPCArray)) {
+              runtimeError("Only arrays have elements.");
+
+              return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            }
+
+            LPCArray array = (LPCArray)val2;
+            int index = ((Double)val1).intValue();
+
+            if (index < 0 || index > array.size() - 1) {
+              runtimeError("Invalid array element index: " + index);
+
+              return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            }
+
+            vStack.push(array.get(index));
+
+            break;
+          } //OP_GET_ELEMENT
+
         case OP_GET_GLOBAL: {
           byte operand = frame.nextInstr(); //constants index
           Object constant = frame.getConstant(operand); //global or nativeFn name
@@ -291,7 +339,7 @@ public class VM {
 
           return error("Undefined object '" + name + "'.");
         } //OP_GET_GLOBAL
-        
+
         case OP_GET_LOCAL: {
           byte operand = frame.nextInstr(); //offset from frame base
           Object value = vStack.get(frame.base() + operand); //local value

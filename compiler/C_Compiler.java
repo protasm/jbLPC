@@ -221,7 +221,7 @@ public class C_Compiler {
     return c_Scope.addUpvalue(new C_Upvalue(index, isLocal));
   }
 
-  //argumentList()
+  ///argumentList()
   public int argumentList() {
     int argCount = 0;
 
@@ -441,7 +441,7 @@ public class C_Compiler {
         defineVariable(index);
       } while (parser.match(TOKEN_COMMA));
 
-    parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+    parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters.");
     parser.consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
 
     block();
@@ -462,6 +462,23 @@ public class C_Compiler {
     //at the end of the function body.
   }
 
+  //array()
+  public int array() {
+    int elementCount = 0;
+
+	if (!parser.check(TOKEN_RIGHT_BRACE))
+      do {
+        expression();
+      
+        elementCount++;
+      } while (parser.match(TOKEN_COMMA));
+	
+    parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after array elements.");
+    parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after array.");
+    
+    return elementCount;
+  }
+  
   //identifiersEqual(Token, Token)
   private boolean identifiersEqual(Token a, Token b) {
     return a.lexeme().equals(b.lexeme());

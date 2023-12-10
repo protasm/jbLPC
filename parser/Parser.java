@@ -19,13 +19,14 @@ public class Parser {
     public static final int PREC_ASSIGNMENT = 1;  // =, -=, +=
     public static final int PREC_OR         = 2;  // or
     public static final int PREC_AND        = 3;  // and
-    public static final int PREC_EQUALITY   = 4;  // == !=
-    public static final int PREC_COMPARISON = 5;  // < > <= >=
-    public static final int PREC_TERM       = 6;  // + -
-    public static final int PREC_FACTOR     = 7;  // * /
-    public static final int PREC_UNARY      = 8;  // ! -
-    public static final int PREC_CALL       = 9;  // . ()
-    public static final int PREC_PRIMARY    = 10;
+    public static final int PREC_EQUALITY   = 4;  // ==, !=
+    public static final int PREC_COMPARISON = 5;  // <, >, <=, >=
+    public static final int PREC_TERM       = 6;  // +, -
+    public static final int PREC_FACTOR     = 7;  // *, /
+    public static final int PREC_UNARY      = 8;  // !, -
+    public static final int PREC_INDEX      = 9;  // []
+    public static final int PREC_CALL       = 10; // ->, ()
+    public static final int PREC_PRIMARY    = 11;
 
     //Precedence()
     private Precedence() {}
@@ -228,51 +229,53 @@ public class Parser {
     //Column 2: Parselet to use when TokenType appears as expression prefix
     //Column 3: Parselet to use when TokenType appears as expression infix
     //Column 4: Precedence to use when TokenType appears as expression infix
-    register(TOKEN_LEFT_PAREN,    new GroupingParselet(), new CallParselet(),   PREC_CALL);
-    register(TOKEN_RIGHT_PAREN,   null,                   null,                 PREC_NONE);
-    register(TOKEN_LEFT_BRACE,    null,                   null,                 PREC_NONE);
-    register(TOKEN_RIGHT_BRACE,   null,                   null,                 PREC_NONE);
-    register(TOKEN_COMMA,         null,                   null,                 PREC_NONE);
+    register(TOKEN_LEFT_PAREN,    new LParenParselet(),   new CallParselet(),     PREC_CALL);
+    register(TOKEN_RIGHT_PAREN,   null,                   null,                   PREC_NONE);
+    register(TOKEN_LEFT_BRACE,    null,                   null,                   PREC_NONE);
+    register(TOKEN_RIGHT_BRACE,   null,                   null,                   PREC_NONE);
+    register(TOKEN_LEFT_BRACKET,  null,                   new LBracketParselet(), PREC_INDEX);
+    register(TOKEN_RIGHT_BRACKET, null,                   null,                   PREC_NONE);
+    register(TOKEN_COMMA,         null,                   null,                   PREC_NONE);
     //register(TOKEN_DOT,           null,                   new DotParselet(),    PREC_CALL);
-    register(TOKEN_DOT,           null,                   null,                 PREC_NONE);
-    register(TOKEN_INVOKE,        null,                   new InvokeParselet(), PREC_CALL);
-    register(TOKEN_MINUS,         new UnaryParselet(),    new BinaryParselet(), PREC_TERM);
-    register(TOKEN_MINUS_EQUAL,   null,                   null,                 PREC_NONE);
-    register(TOKEN_MINUS_MINUS,   null,                   null,                 PREC_NONE);
-    register(TOKEN_PLUS,          null,                   new BinaryParselet(), PREC_TERM);
-    register(TOKEN_PLUS_EQUAL,    null,                   null,                 PREC_NONE);
-    register(TOKEN_PLUS_PLUS,     null,                   null,                 PREC_NONE);
-    register(TOKEN_SEMICOLON,     null,                   null,                 PREC_NONE);
-    register(TOKEN_SLASH,         null,                   new BinaryParselet(), PREC_FACTOR);
-    register(TOKEN_SLASH_EQUAL,   null,                   null,                 PREC_NONE);
-    register(TOKEN_STAR,          null,                   new BinaryParselet(), PREC_FACTOR);
-    register(TOKEN_STAR_EQUAL,    null,                   null,                 PREC_NONE);
-    register(TOKEN_BANG,          new UnaryParselet(),    null,                 PREC_NONE);
-    register(TOKEN_BANG_EQUAL,    null,                   new BinaryParselet(), PREC_EQUALITY);
-    register(TOKEN_EQUAL,         null,                   null,                 PREC_NONE);
-    register(TOKEN_EQUAL_EQUAL,   null,                   new BinaryParselet(), PREC_EQUALITY);
-    register(TOKEN_GREATER,       null,                   new BinaryParselet(), PREC_COMPARISON);
-    register(TOKEN_GREATER_EQUAL, null,                   new BinaryParselet(), PREC_COMPARISON);
-    register(TOKEN_LESS,          null,                   new BinaryParselet(), PREC_COMPARISON);
-    register(TOKEN_LESS_EQUAL,    null,                   new BinaryParselet(), PREC_COMPARISON);
-    register(TOKEN_IDENTIFIER,    new VariableParselet(), null,                 PREC_NONE);
-    register(TOKEN_STRING,        new StringParselet(),   null,                 PREC_NONE);
-    register(TOKEN_NUMBER,        new NumberParselet(),   null,                 PREC_NONE);
-    register(TOKEN_DBL_AMP,       null,                   new AndParselet(),    PREC_AND);
-    register(TOKEN_ELSE,          null,                   null,                 PREC_NONE);
-    register(TOKEN_FALSE,         new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_FOR,           null,                   null,                 PREC_NONE);
-    register(TOKEN_IF,            null,                   null,                 PREC_NONE);
-    register(TOKEN_INHERIT,       null,                   null,                 PREC_NONE);
-    register(TOKEN_NIL,           new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_DBL_PIPE,      null,                   new OrParselet(),     PREC_OR);
-    register(TOKEN_RETURN,        null,                   null,                 PREC_NONE);
-    register(TOKEN_SUPER,         new SuperParselet(),    null,                 PREC_NONE);
+    register(TOKEN_DOT,           null,                   null,                   PREC_NONE);
+    register(TOKEN_INVOKE,        null,                   new InvokeParselet(),   PREC_CALL);
+    register(TOKEN_MINUS,         new UnaryParselet(),    new BinaryParselet(),   PREC_TERM);
+    register(TOKEN_MINUS_EQUAL,   null,                   null,                   PREC_NONE);
+    register(TOKEN_MINUS_MINUS,   null,                   null,                   PREC_NONE);
+    register(TOKEN_PLUS,          null,                   new BinaryParselet(),   PREC_TERM);
+    register(TOKEN_PLUS_EQUAL,    null,                   null,                   PREC_NONE);
+    register(TOKEN_PLUS_PLUS,     null,                   null,                   PREC_NONE);
+    register(TOKEN_SEMICOLON,     null,                   null,                   PREC_NONE);
+    register(TOKEN_SLASH,         null,                   new BinaryParselet(),   PREC_FACTOR);
+    register(TOKEN_SLASH_EQUAL,   null,                   null,                   PREC_NONE);
+    register(TOKEN_STAR,          null,                   new BinaryParselet(),   PREC_FACTOR);
+    register(TOKEN_STAR_EQUAL,    null,                   null,                   PREC_NONE);
+    register(TOKEN_BANG,          new UnaryParselet(),    null,                   PREC_NONE);
+    register(TOKEN_BANG_EQUAL,    null,                   new BinaryParselet(),   PREC_EQUALITY);
+    register(TOKEN_EQUAL,         null,                   null,                   PREC_NONE);
+    register(TOKEN_EQUAL_EQUAL,   null,                   new BinaryParselet(),   PREC_EQUALITY);
+    register(TOKEN_GREATER,       null,                   new BinaryParselet(),   PREC_COMPARISON);
+    register(TOKEN_GREATER_EQUAL, null,                   new BinaryParselet(),   PREC_COMPARISON);
+    register(TOKEN_LESS,          null,                   new BinaryParselet(),   PREC_COMPARISON);
+    register(TOKEN_LESS_EQUAL,    null,                   new BinaryParselet(),   PREC_COMPARISON);
+    register(TOKEN_IDENTIFIER,    new VariableParselet(), null,                   PREC_NONE);
+    register(TOKEN_STRING,        new StringParselet(),   null,                   PREC_NONE);
+    register(TOKEN_NUMBER,        new NumberParselet(),   null,                   PREC_NONE);
+    register(TOKEN_DBL_AMP,       null,                   new AndParselet(),      PREC_AND);
+    register(TOKEN_ELSE,          null,                   null,                   PREC_NONE);
+    register(TOKEN_FALSE,         new LiteralParselet(),  null,                   PREC_NONE);
+    register(TOKEN_FOR,           null,                   null,                   PREC_NONE);
+    register(TOKEN_IF,            null,                   null,                   PREC_NONE);
+    register(TOKEN_INHERIT,       null,                   null,                   PREC_NONE);
+    register(TOKEN_NIL,           new LiteralParselet(),  null,                   PREC_NONE);
+    register(TOKEN_DBL_PIPE,      null,                   new OrParselet(),       PREC_OR);
+    register(TOKEN_RETURN,        null,                   null,                   PREC_NONE);
+    register(TOKEN_SUPER,         new SuperParselet(),    null,                   PREC_NONE);
 //    register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
-    register(TOKEN_TRUE,          new LiteralParselet(),  null,                 PREC_NONE);
-    register(TOKEN_PRIMITIVE,     null,                   null,                 PREC_NONE);
-    register(TOKEN_WHILE,         null,                   null,                 PREC_NONE);
-    register(TOKEN_ERROR,         null,                   null,                 PREC_NONE);
-    register(TOKEN_EOF,           null,                   null,                 PREC_NONE);
+    register(TOKEN_TRUE,          new LiteralParselet(),  null,                   PREC_NONE);
+    register(TOKEN_PRIMITIVE,     null,                   null,                   PREC_NONE);
+    register(TOKEN_WHILE,         null,                   null,                   PREC_NONE);
+    register(TOKEN_ERROR,         null,                   null,                   PREC_NONE);
+    register(TOKEN_EOF,           null,                   null,                   PREC_NONE);
   }
 }
