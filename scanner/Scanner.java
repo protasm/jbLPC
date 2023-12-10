@@ -2,6 +2,7 @@ package jbLPC.scanner;
 
 import static jbLPC.scanner.TokenType.TOKEN_BANG;
 import static jbLPC.scanner.TokenType.TOKEN_BANG_EQUAL;
+import static jbLPC.scanner.TokenType.TOKEN_COLON;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_DBL_AMP;
 import static jbLPC.scanner.TokenType.TOKEN_DBL_PIPE;
@@ -75,6 +76,7 @@ public class Scanner implements Iterator<Token> {
       {
         // LPC Types.
         put("int", TOKEN_TYPE);
+        put("mapping", TOKEN_TYPE);
         put("mixed", TOKEN_TYPE);
         put("object", TOKEN_TYPE);
         put("status", TOKEN_TYPE);
@@ -176,7 +178,7 @@ public class Scanner implements Iterator<Token> {
       if (ss.match(':'))
         return makeToken(TOKEN_SUPER);
       else
-        return unexpectedChar(c);
+        return makeToken(TOKEN_COLON);
     case '-':
       if (ss.match('-'))
         return makeToken(TOKEN_MINUS_MINUS);

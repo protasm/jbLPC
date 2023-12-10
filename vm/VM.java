@@ -14,7 +14,7 @@ import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
-import static jbLPC.compiler.C_OpCode.OP_GET_ELEMENT;
+import static jbLPC.compiler.C_OpCode.OP_GET_ARR_ELEM;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
@@ -26,6 +26,7 @@ import static jbLPC.compiler.C_OpCode.OP_JUMP;
 import static jbLPC.compiler.C_OpCode.OP_JUMP_IF_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_LESS;
 import static jbLPC.compiler.C_OpCode.OP_LOOP;
+import static jbLPC.compiler.C_OpCode.OP_MAPPING;
 import static jbLPC.compiler.C_OpCode.OP_METHOD;
 import static jbLPC.compiler.C_OpCode.OP_MULTIPLY;
 import static jbLPC.compiler.C_OpCode.OP_NEGATE;
@@ -283,7 +284,7 @@ public class VM {
           break;
         } //OP_FIELD
         
-        case OP_GET_ELEMENT: {
+        case OP_GET_ARR_ELEM: {
             Object val1 = vStack.pop(); //element index
             Object val2 = vStack.pop(); //LPC array
             
@@ -502,6 +503,22 @@ public class VM {
           break;
         } //OP_LOOP
         
+        case OP_MAPPING: {
+            byte operand = frame.nextInstr(); //entry count
+            Map<Object, Object> map = new HashMap<Object, Object>();
+            
+            for (int i = 0; i < operand; i++) {
+              Object val1 = vStack.pop(); //value
+              Object val2 = vStack.pop(); //key
+              
+              map.put(val2, val1);
+            }
+
+            vStack.push(new LPCMapping(map));
+
+            break;	
+          } //OP_MAPPING
+
         case OP_METHOD: {
           byte operand = frame.nextInstr(); //constants index
           Object constant = frame.getConstant(operand); //method name

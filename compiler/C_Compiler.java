@@ -21,6 +21,7 @@ import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
 import static jbLPC.compiler.C_OpCode.OP_SUBTRACT;
 import static jbLPC.parser.Parser.Precedence.PREC_ASSIGNMENT;
+import static jbLPC.scanner.TokenType.TOKEN_COLON;
 import static jbLPC.scanner.TokenType.TOKEN_COMMA;
 import static jbLPC.scanner.TokenType.TOKEN_ELSE;
 import static jbLPC.scanner.TokenType.TOKEN_EOF;
@@ -35,6 +36,7 @@ import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_TYPE;
 import static jbLPC.scanner.TokenType.TOKEN_RETURN;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACE;
+import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACKET;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
@@ -478,6 +480,27 @@ public class C_Compiler {
 	
     parser.consume(TOKEN_RIGHT_BRACE, "Expect '}' after array elements.");
     parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after array.");
+    
+    return elementCount;
+  }
+  
+  //mapping()
+  public int mapping() {
+    int elementCount = 0;
+    
+    if (!parser.check(TOKEN_RIGHT_BRACKET))
+      do {
+        expression();
+        
+        parser.consume(TOKEN_COLON, "Expect ':' after mapping key.");
+        
+        expression();
+        
+        elementCount++;
+      } while (parser.match(TOKEN_COMMA));
+    
+    parser.consume(TOKEN_RIGHT_BRACKET, "Expect ']' after mapping entries.");
+    parser.consume(TOKEN_RIGHT_PAREN, "Expect ')' after mapping.");
     
     return elementCount;
   }

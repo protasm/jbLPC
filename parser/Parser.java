@@ -233,8 +233,9 @@ public class Parser {
     register(TOKEN_RIGHT_PAREN,   null,                   null,                   PREC_NONE);
     register(TOKEN_LEFT_BRACE,    null,                   null,                   PREC_NONE);
     register(TOKEN_RIGHT_BRACE,   null,                   null,                   PREC_NONE);
-    register(TOKEN_LEFT_BRACKET,  null,                   new IndexParselet(), PREC_INDEX);
+    register(TOKEN_LEFT_BRACKET,  null,                   new IndexParselet(),    PREC_INDEX);
     register(TOKEN_RIGHT_BRACKET, null,                   null,                   PREC_NONE);
+    register(TOKEN_COLON,         null,                   null,                   PREC_NONE);
     register(TOKEN_COMMA,         null,                   null,                   PREC_NONE);
     //register(TOKEN_DOT,           null,                   new DotParselet(),    PREC_CALL);
     register(TOKEN_DOT,           null,                   null,                   PREC_NONE);
