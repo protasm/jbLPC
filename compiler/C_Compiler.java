@@ -32,12 +32,13 @@ import static jbLPC.scanner.TokenType.TOKEN_LEFT_BRACE;
 import static jbLPC.scanner.TokenType.TOKEN_LEFT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_MINUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
-import static jbLPC.scanner.TokenType.TOKEN_PRIMITIVE;
+import static jbLPC.scanner.TokenType.TOKEN_TYPE;
 import static jbLPC.scanner.TokenType.TOKEN_RETURN;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACE;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_PAREN;
 import static jbLPC.scanner.TokenType.TOKEN_SEMICOLON;
 import static jbLPC.scanner.TokenType.TOKEN_SLASH_EQUAL;
+import static jbLPC.scanner.TokenType.TOKEN_STAR;
 import static jbLPC.scanner.TokenType.TOKEN_STAR_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
@@ -101,7 +102,7 @@ public class C_Compiler {
 
   //declaration()
   protected void declaration() {
-    if (parser.match(TOKEN_PRIMITIVE))
+    if (parser.match(TOKEN_TYPE))
       typedDeclaration();
     else
       statement();
@@ -112,6 +113,8 @@ public class C_Compiler {
 
   //typedDeclaration()
   protected void typedDeclaration() {
+	parser.match(TOKEN_STAR); //temp
+
     int index = parseVariable("Expect function or variable name.");
 
     if (!parser.check(TOKEN_LEFT_PAREN))
@@ -351,7 +354,7 @@ public class C_Compiler {
     //Initializer clause.
     if (parser.match(TOKEN_SEMICOLON)) {
       // No initializer.
-    } else if (parser.match(TOKEN_PRIMITIVE)) {
+    } else if (parser.match(TOKEN_TYPE)) {
       int index = parseVariable("Expect variable name.");
 
       varDeclaration(index);
@@ -434,7 +437,7 @@ public class C_Compiler {
       do {
         function.setArity(function.arity() + 1);
 
-        parser.consume(TOKEN_PRIMITIVE, "Expect type for parameter.");
+        parser.consume(TOKEN_TYPE, "Expect type for parameter.");
 
         int index = parseVariable("Expect parameter name.");
 

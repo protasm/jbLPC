@@ -89,7 +89,7 @@ public class VM {
   private ObjStack vStack; //Value stack
   private Stack<RunFrame> fStack; //RunFrame stack
   private Upvalue openUpvalues; //linked list
-  
+
   public boolean execCompilation;
 
   //VM()
@@ -306,7 +306,7 @@ public class VM {
             int index = ((Double)val1).intValue();
 
             if (index < 0 || index > array.size() - 1) {
-              runtimeError("Invalid array element index: " + index);
+              runtimeError("Array element index out of bounds: " + index);
 
               return InterpretResult.INTERPRET_RUNTIME_ERROR;
             }

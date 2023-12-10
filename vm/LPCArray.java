@@ -29,6 +29,16 @@ public class LPCArray {
   //toString()
   @Override
   public String toString() {
-    return "<arr: " + array.toString() + ">";
+    StringBuilder sb = new StringBuilder("({");
+
+    for (int i = 0; i < array.size(); i++) {
+      sb.append(array.get(i));
+      
+      if (i < array.size() - 1) {
+        sb.append(", ");
+      }
+    }
+
+    return sb.toString() + "})";
   }
 }

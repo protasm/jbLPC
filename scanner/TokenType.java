@@ -30,7 +30,7 @@ public enum TokenType {
   TOKEN_TRUE, TOKEN_WHILE,
 
   // LPC Type tokens.
-  TOKEN_PRIMITIVE,
+  TOKEN_TYPE,
 
   // Special tokens.
   TOKEN_ERROR, TOKEN_EOF

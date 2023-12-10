@@ -32,7 +32,7 @@ import static jbLPC.scanner.TokenType.TOKEN_NUMBER;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_PLUS_PLUS;
-import static jbLPC.scanner.TokenType.TOKEN_PRIMITIVE;
+import static jbLPC.scanner.TokenType.TOKEN_TYPE;
 import static jbLPC.scanner.TokenType.TOKEN_RETURN;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACE;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACKET;
@@ -74,12 +74,12 @@ public class Scanner implements Iterator<Token> {
 
       {
         // LPC Types.
-        put("int", TOKEN_PRIMITIVE);
-        put("mixed", TOKEN_PRIMITIVE);
-        put("object", TOKEN_PRIMITIVE);
-        put("status", TOKEN_PRIMITIVE);
-        put("string", TOKEN_PRIMITIVE);
-        put("void", TOKEN_PRIMITIVE);
+        put("int", TOKEN_TYPE);
+        put("mixed", TOKEN_TYPE);
+        put("object", TOKEN_TYPE);
+        put("status", TOKEN_TYPE);
+        put("string", TOKEN_TYPE);
+        put("void", TOKEN_TYPE);
       }
     };
 

@@ -6,7 +6,7 @@ import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACKET;
 import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
-public class LBracketParselet implements Parselet {
+public class IndexParselet implements Parselet {
   //parse(Parser, LPCCompiler, boolean)
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     compiler.expression(); //element index

@@ -95,7 +95,7 @@ public class Parser {
       if (previous.type() == TOKEN_SEMICOLON) return;
 
       switch (current.type()) {
-        case TOKEN_PRIMITIVE:
+        case TOKEN_TYPE:
         case TOKEN_FOR:
         case TOKEN_IF:
         case TOKEN_WHILE:
@@ -233,7 +233,7 @@ public class Parser {
     register(TOKEN_RIGHT_PAREN,   null,                   null,                   PREC_NONE);
     register(TOKEN_LEFT_BRACE,    null,                   null,                   PREC_NONE);
     register(TOKEN_RIGHT_BRACE,   null,                   null,                   PREC_NONE);
-    register(TOKEN_LEFT_BRACKET,  null,                   new LBracketParselet(), PREC_INDEX);
+    register(TOKEN_LEFT_BRACKET,  null,                   new IndexParselet(), PREC_INDEX);
     register(TOKEN_RIGHT_BRACKET, null,                   null,                   PREC_NONE);
     register(TOKEN_COMMA,         null,                   null,                   PREC_NONE);
     //register(TOKEN_DOT,           null,                   new DotParselet(),    PREC_CALL);
@@ -273,7 +273,7 @@ public class Parser {
     register(TOKEN_SUPER,         new SuperParselet(),    null,                   PREC_NONE);
 //    register(TOKEN_THIS,          new ThisParselet(),     null,                 PREC_NONE);
     register(TOKEN_TRUE,          new LiteralParselet(),  null,                   PREC_NONE);
-    register(TOKEN_PRIMITIVE,     null,                   null,                   PREC_NONE);
+    register(TOKEN_TYPE,     null,                   null,                   PREC_NONE);
     register(TOKEN_WHILE,         null,                   null,                   PREC_NONE);
     register(TOKEN_ERROR,         null,                   null,                   PREC_NONE);
     register(TOKEN_EOF,           null,                   null,                   PREC_NONE);
