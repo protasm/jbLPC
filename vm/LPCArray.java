@@ -2,6 +2,7 @@ package jbLPC.vm;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
 
 public class LPCArray {
   private List<Object> array;
@@ -29,16 +30,16 @@ public class LPCArray {
   //toString()
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder("({");
+	StringBuilder result = new StringBuilder("({");
+    ListIterator<Object> iterator = array.listIterator();
 
-    for (int i = 0; i < array.size(); i++) {
-      sb.append(array.get(i));
+    while (iterator.hasNext()) {
+      result.append(iterator.next());
       
-      if (i < array.size() - 1) {
-        sb.append(", ");
-      }
+      if (iterator.hasNext())
+        result.append(", ");
     }
 
-    return sb.toString() + "})";
-  }
+      return result.toString() + "})";
+    }
 }
