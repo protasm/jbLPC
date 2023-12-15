@@ -17,16 +17,16 @@ public class LPCMapping {
     this.map = map;
   }
 
-  //get(int)
-//  public Object get(int index) {
-//    return array.get(index);
-//  }
+  //get(Object)
+  public Object get(Object key) {
+    return map.get(key);
+  }
 
-  //size()
-//  public int size() {
-//    return array.size();
-//  }
-  
+  //containsKey(Object)
+  public boolean containsKey(Object key) {
+    return map.containsKey(key);
+  }
+
   //toString()
   @Override
   public String toString() {

@@ -14,7 +14,7 @@ import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
-import static jbLPC.compiler.C_OpCode.OP_GET_ARR_ELEM;
+import static jbLPC.compiler.C_OpCode.OP_GET_ITEM;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
@@ -173,7 +173,7 @@ public class VM {
 
           vStack.push(new LPCArray(elements.reversed()));
 
-          break;	
+          break;
         } //OP_ARRAY
         
         case OP_CALL: {
@@ -284,39 +284,6 @@ public class VM {
           break;
         } //OP_FIELD
         
-        case OP_GET_ARR_ELEM: {
-            Object val1 = vStack.pop(); //element index
-            Object val2 = vStack.pop(); //LPC array
-            
-            if (
-              !(val1 instanceof Double) ||
-              (Double)val1 % 1 != 0
-            ) {
-              runtimeError("Invalid array element index: " + (Double)val1);
-
-              return InterpretResult.INTERPRET_RUNTIME_ERROR;
-            }
-
-            if (!(val2 instanceof LPCArray)) {
-              runtimeError("Only arrays have elements.");
-
-              return InterpretResult.INTERPRET_RUNTIME_ERROR;
-            }
-
-            LPCArray array = (LPCArray)val2;
-            int index = ((Double)val1).intValue();
-
-            if (index < 0 || index > array.size() - 1) {
-              runtimeError("Array element index out of bounds: " + index);
-
-              return InterpretResult.INTERPRET_RUNTIME_ERROR;
-            }
-
-            vStack.push(array.get(index));
-
-            break;
-          } //OP_GET_ELEMENT
-
         case OP_GET_GLOBAL: {
           byte operand = frame.nextInstr(); //constants index
           Object constant = frame.getConstant(operand); //global or nativeFn name
@@ -340,6 +307,26 @@ public class VM {
 
           return error("Undefined object '" + name + "'.");
         } //OP_GET_GLOBAL
+
+        case OP_GET_ITEM: {
+          Object value = vStack.peekN(1);
+            
+          if (value instanceof LPCArray)
+            if (!(getArrayElement()))
+              return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            else
+              break;
+            
+          if (value instanceof LPCMapping) {
+            getMappingValue();
+                		
+            break;
+          }
+            
+          runtimeError("Only arrays and mappings contain items.");
+            
+          return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        } //OP_GET_ITEM
 
         case OP_GET_LOCAL: {
           byte operand = frame.nextInstr(); //offset from frame base
@@ -900,6 +887,47 @@ public class VM {
     }
   }
 
+  //getArrayElement()
+  private boolean getArrayElement() {
+	Object val1 = vStack.pop();
+	Object val2 = vStack.pop();
+	
+    if (
+      !(val1 instanceof Double) ||
+      (Double)val1 % 1 != 0
+    ) {
+      runtimeError("Invalid array element index: " + (Double)val1);
+
+      return false;
+    }
+
+    LPCArray array = (LPCArray)val2;
+    int index = ((Double)val1).intValue();
+
+    if (index < 0 || index > array.size() - 1) {
+      runtimeError("Array element index out of bounds: " + index);
+
+      return false;
+    }
+
+    vStack.push(array.get(index));
+            
+    return true;
+  }
+  
+  //getMappingValue()
+  private void getMappingValue() {
+    Object val1 = vStack.pop();
+    Object val2 = vStack.pop();
+    
+    LPCMapping mapping = (LPCMapping)val2;
+    
+    if (mapping.containsKey(val1))
+      vStack.push(mapping.get(val1));
+    else
+      vStack.push(null);
+  }
+  
   //isFalsey(Object)
   boolean isFalsey(Object value) {
     //nil and false are falsey and every other value behaves like true.
@@ -931,11 +959,6 @@ public class VM {
     return vStack.peek() instanceof Double;
   }
 
-  //errorOneNumber()
-  private InterpretResult errorOneNumber() {
-    return error("Operand must be a number");
-  }
-
   //twoNumericOperands()
   private boolean twoNumericOperands() {
     Object first = vStack.pop(); //temporarily pop
@@ -946,11 +969,6 @@ public class VM {
     return first instanceof Double && second instanceof Double;
   }
 
-  //errorTwoNumbers()
-  private InterpretResult errorTwoNumbers() {
-    return error("Operands must be two numbers.");
-  }
-
   //twoStringOperands()
   private boolean twoStringOperands() {
     Object first = vStack.pop();
@@ -959,6 +977,16 @@ public class VM {
     vStack.push(first); //push back again
 
     return first instanceof String && second instanceof String;
+  }
+
+  //errorOneNumber()
+  private InterpretResult errorOneNumber() {
+    return error("Operand must be a number");
+  }
+
+  //errorTwoNumbers()
+  private InterpretResult errorTwoNumbers() {
+    return error("Operands must be two numbers.");
   }
 
   //errorTwoNumbersOrStrings()

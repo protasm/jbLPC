@@ -31,6 +31,13 @@ public final class ObjStack {
     return values.peek();
   }
   
+  public Object peekN(int offset) {
+	if (values.size() > 0)
+      return values.get(values.size() - 1 - offset);
+	else
+	  return null;
+  }
+  
   public Object get(int index) {
     return values.get(index);
   }

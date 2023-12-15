@@ -13,7 +13,7 @@ public final class C_OpCode {
   public static final byte OP_FALSE         = 0x09; //simple
   public static final byte OP_FIELD         = 0x0A; //const (field name)
   public static final byte OP_GET_GLOBAL    = 0x0B; //const (global name)
-  public static final byte OP_GET_ARR_ELEM   = 0x0C; //simple
+  public static final byte OP_GET_ITEM      = 0x0C; //simple
   public static final byte OP_GET_LOCAL     = 0x0D; //operand (stack offset)
   public static final byte OP_GET_PROP      = 0x0E; //const (prop name)
   public static final byte OP_GET_SUPER     = 0x0F; //const

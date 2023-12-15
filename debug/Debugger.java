@@ -12,8 +12,8 @@ import static jbLPC.compiler.C_OpCode.OP_DIVIDE;
 import static jbLPC.compiler.C_OpCode.OP_EQUAL;
 import static jbLPC.compiler.C_OpCode.OP_FALSE;
 import static jbLPC.compiler.C_OpCode.OP_FIELD;
-import static jbLPC.compiler.C_OpCode.OP_GET_ARR_ELEM;
 import static jbLPC.compiler.C_OpCode.OP_GET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_GET_ITEM;
 import static jbLPC.compiler.C_OpCode.OP_GET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_GET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_GET_SUPER;
@@ -208,10 +208,10 @@ public class Debugger {
         index = simpleInstruction("OP_FALSE", index); break;
       case OP_FIELD:
         index = constantInstruction("OP_FIELD", instrList, index); break;
-      case OP_GET_ARR_ELEM:
-          index = simpleInstruction("OP_GET_ARR_ELEM", index); break;
       case OP_GET_GLOBAL:
         index = constantInstruction("OP_GET_GLOBAL", instrList, index); break;
+      case OP_GET_ITEM:
+          index = simpleInstruction("OP_GET_ITEM", index); break;
       case OP_GET_LOCAL:
         index = operandInstruction("OP_GET_LOCAL", instrList, index, "offset from base"); break;
       case OP_GET_PROP:
