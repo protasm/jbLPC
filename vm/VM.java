@@ -36,6 +36,7 @@ import static jbLPC.compiler.C_OpCode.OP_OBJECT;
 import static jbLPC.compiler.C_OpCode.OP_POP;
 import static jbLPC.compiler.C_OpCode.OP_RETURN;
 import static jbLPC.compiler.C_OpCode.OP_SET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_ITEM;
 import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
@@ -616,6 +617,18 @@ public class VM {
           break;
         } //OP_SET_GLOBAL
         
+        case OP_SET_ITEM: {
+          System.out.println("Oh setting an item eh");
+          
+          vStack.pop(); //new element or value
+          vStack.pop(); //index or key
+          vStack.pop(); //array or mapping
+          
+          vStack.push(null); //temp? push something else here?
+          
+          break;
+        } //OP_SET_ITEM
+
         case OP_SET_LOCAL: {
           byte operand = frame.nextInstr(); //offset from frame base
           Object value = vStack.peek(); //local value

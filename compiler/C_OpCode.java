@@ -36,12 +36,13 @@ public final class C_OpCode {
   public static final byte OP_POP           = 0x20; //simple
   public static final byte OP_RETURN        = 0x21; //simple
   public static final byte OP_SET_GLOBAL    = 0x22; //const (global name)
-  public static final byte OP_SET_LOCAL     = 0x23; //operand (stack offset)
-  public static final byte OP_SET_PROP      = 0x24; //const (prop name)
-  public static final byte OP_SET_UPVAL     = 0x25; //operand
-  public static final byte OP_SUBTRACT      = 0x26; //simple
-  public static final byte OP_SUPER_INVOKE  = 0x27; //invoke
-  public static final byte OP_TRUE          = 0x28; //simple
+  public static final byte OP_SET_ITEM      = 0x23; //simple
+  public static final byte OP_SET_LOCAL     = 0x24; //operand (stack offset)
+  public static final byte OP_SET_PROP      = 0x25; //const (prop name)
+  public static final byte OP_SET_UPVAL     = 0x26; //operand
+  public static final byte OP_SUBTRACT      = 0x27; //simple
+  public static final byte OP_SUPER_INVOKE  = 0x28; //invoke
+  public static final byte OP_TRUE          = 0x29; //simple
 
   //C_OpCode()
   private C_OpCode() {}

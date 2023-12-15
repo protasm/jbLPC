@@ -1,6 +1,8 @@
 package jbLPC.parser.parselet;
 
 import static jbLPC.compiler.C_OpCode.OP_GET_ITEM;
+import static jbLPC.compiler.C_OpCode.OP_SET_ITEM;
+import static jbLPC.scanner.TokenType.TOKEN_EQUAL;
 import static jbLPC.scanner.TokenType.TOKEN_RIGHT_BRACKET;
 
 import jbLPC.compiler.C_Compiler;
@@ -12,7 +14,12 @@ public class IndexParselet implements Parselet {
     compiler.expression(); //element index
     
     parser.consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array element index.");
+    
+    if (parser.match(TOKEN_EQUAL)) { //assignment
+      compiler.expression();
 
-    compiler.emitCode(OP_GET_ITEM);
+      compiler.emitCode(OP_SET_ITEM);
+    } else
+      compiler.emitCode(OP_GET_ITEM);
   }
 }

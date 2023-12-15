@@ -185,9 +185,9 @@ public class Parser {
 
     // Look up the Parselet to use where the previous token's type
     // is an expression prefix.
-    Parselet prefixRule = getRule(previous.type()).prefix();
+    Parselet prefixParselet = getRule(previous.type()).prefix();
 
-    if (prefixRule == null) {
+    if (prefixParselet == null) {
       error("Expect expression.");
 
       return;
@@ -195,15 +195,15 @@ public class Parser {
 
     boolean canAssign = (precedence <= PREC_ASSIGNMENT);
 
-    prefixRule.parse(this, c_Compiler, canAssign);
+    prefixParselet.parse(this, c_Compiler, canAssign);
 
     //infix parsing loop
     while (precedence <= getRule(current.type()).precedence()) {
       advance();
 
-      Parselet infixRule = getRule(previous.type()).infix();
+      Parselet infixParselet = getRule(previous.type()).infix();
 
-      infixRule.parse(this, c_Compiler, canAssign);
+      infixParselet.parse(this, c_Compiler, canAssign);
     }
 
     if (canAssign)

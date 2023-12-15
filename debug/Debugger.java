@@ -35,6 +35,7 @@ import static jbLPC.compiler.C_OpCode.OP_OBJECT;
 import static jbLPC.compiler.C_OpCode.OP_POP;
 import static jbLPC.compiler.C_OpCode.OP_RETURN;
 import static jbLPC.compiler.C_OpCode.OP_SET_GLOBAL;
+import static jbLPC.compiler.C_OpCode.OP_SET_ITEM;
 import static jbLPC.compiler.C_OpCode.OP_SET_LOCAL;
 import static jbLPC.compiler.C_OpCode.OP_SET_PROP;
 import static jbLPC.compiler.C_OpCode.OP_SET_UPVAL;
@@ -254,6 +255,8 @@ public class Debugger {
         index = simpleInstruction("OP_RETURN", index); break;
       case OP_SET_GLOBAL:
         index = constantInstruction("OP_SET_GLOBAL", instrList, index); break;
+      case OP_SET_ITEM:
+        index = simpleInstruction("OP_SET_ITEM", index); break;
       case OP_SET_LOCAL:
         index = operandInstruction("OP_SET_LOCAL", instrList, index, "offset from base"); break;
       case OP_SET_PROP:
