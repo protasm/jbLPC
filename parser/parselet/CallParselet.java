@@ -6,7 +6,7 @@ import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
 public class CallParselet implements Parselet {
-  //parse(Parser, LPCCompiler, boolean)
+  //parse(Parser, C_Compiler, boolean)
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     int argCount = compiler.argumentList();
     

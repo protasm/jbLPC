@@ -276,7 +276,7 @@ public class VM {
           byte operand = frame.nextInstr(); //constants index
           Object constant = frame.getConstant(operand); //field name
           Object value = vStack.peek(); //field value
-          LPCObject lpcObject = (LPCObject)vStack.get(vStack.size() - 2); //LPC object
+          LPCObject lpcObject = (LPCObject)vStack.peekN(1); //LPC object
 
           lpcObject.fields().put((String)constant, value);
 
@@ -426,7 +426,7 @@ public class VM {
 
           LPCObject lpcObject = (LPCObject)value;
 
-          value = vStack.get(vStack.size() - 2); //inheriting object
+          value = vStack.peekN(1); //inheriting object
 
           if (!(value instanceof LPCObject)) {
             runtimeError("Inheriting object must be an LPCObject.");
@@ -511,7 +511,7 @@ public class VM {
           byte operand = frame.nextInstr(); //constants index
           Object constant = frame.getConstant(operand); //method name
           Closure closure = (Closure)vStack.peek(); //closure
-          LPCObject lpcObject = (LPCObject)vStack.get(vStack.size() - 2); //LPC object
+          LPCObject lpcObject = (LPCObject)vStack.peekN(1); //LPC object
 
           lpcObject.methods().put((String)constant, closure);
 
@@ -618,15 +618,23 @@ public class VM {
         } //OP_SET_GLOBAL
         
         case OP_SET_ITEM: {
-          System.out.println("Oh setting an item eh");
+          Object value = vStack.peekN(2);
           
-          vStack.pop(); //new element or value
-          vStack.pop(); //index or key
-          vStack.pop(); //array or mapping
-          
-          vStack.push(null); //temp? push something else here?
-          
-          break;
+          if (value instanceof LPCArray)
+            if (!(setArrayElement()))
+              return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            else
+              break;
+                
+          if (value instanceof LPCMapping) {
+            setMappingValue();
+                    		
+            break;
+          }
+                
+          runtimeError("Only arrays and mappings contain items.");
+                
+          return InterpretResult.INTERPRET_RUNTIME_ERROR;
         } //OP_SET_ITEM
 
         case OP_SET_LOCAL: {
@@ -639,7 +647,7 @@ public class VM {
         } //OP_SET_LOCAL
         
         case OP_SET_PROP: {
-          Object value = vStack.get(vStack.size() - 2); //LPC object
+          Object value = vStack.peekN(1); //LPC object
 
           if (!(value instanceof LPCObject)) {
             runtimeError("Only LPC Objects have fields.");
@@ -902,36 +910,61 @@ public class VM {
 
   //getArrayElement()
   private boolean getArrayElement() {
-	Object val1 = vStack.pop();
-	Object val2 = vStack.pop();
+	Object val1 = vStack.pop(); //index
+	Object val2 = vStack.pop(); //array
 	
-    if (
-      !(val1 instanceof Double) ||
-      (Double)val1 % 1 != 0
-    ) {
-      runtimeError("Invalid array element index: " + (Double)val1);
-
-      return false;
-    }
-
     LPCArray array = (LPCArray)val2;
-    int index = ((Double)val1).intValue();
+    int index = checkArrayIndex(array, (Double)val1);
 
-    if (index < 0 || index > array.size() - 1) {
-      runtimeError("Array element index out of bounds: " + index);
-
-      return false;
-    }
+    if (index == -1) return false;
 
     vStack.push(array.get(index));
             
     return true;
   }
   
+  //setArrayElement()
+  private boolean setArrayElement() {
+	Object val1 = vStack.pop(); //element value
+	Object val2 = vStack.pop(); //index
+	Object val3 = vStack.peek(); //array; leave stacked
+
+    LPCArray array = (LPCArray)val3;
+    int index = checkArrayIndex(array, (Double)val2);
+
+    if (index == -1) return false;
+
+	array.set(index, val1);
+	
+	return true;
+  }
+  
+  //checkArrayIndex(LPCArray, Double)
+  private int checkArrayIndex(LPCArray array, Double d) {
+    if (
+	  !(d instanceof Double) ||
+	  (Double)d % 1 != 0
+	) {
+	  runtimeError("Invalid array element index: " + (Double)d);
+
+	  return -1;
+	}
+    
+    int index = d.intValue();
+    
+    if (index < 0 || index > array.size() - 1) {
+      runtimeError("Array element index out of bounds: " + index);
+
+      return -1;
+    }
+    
+    return index;
+  }
+  
   //getMappingValue()
   private void getMappingValue() {
-    Object val1 = vStack.pop();
-    Object val2 = vStack.pop();
+    Object val1 = vStack.pop(); //key
+    Object val2 = vStack.pop(); //mapping
     
     LPCMapping mapping = (LPCMapping)val2;
     
@@ -939,6 +972,17 @@ public class VM {
       vStack.push(mapping.get(val1));
     else
       vStack.push(null);
+  }
+  
+  //setMappingValue()
+  private void setMappingValue() {
+	Object val1 = vStack.pop(); //value
+    Object val2 = vStack.pop(); //key
+    Object val3 = vStack.peek(); //mapping; leave stacked
+    
+    LPCMapping mapping = (LPCMapping)val3;
+
+    mapping.set(val2, val1);
   }
   
   //isFalsey(Object)

@@ -11,7 +11,7 @@ import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
 public class LParenParselet implements Parselet {
-  //parse(Parser, LPCCompiler, boolean)
+  //parse(Parser, C_Compiler, boolean)
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     if (parser.match(TOKEN_LEFT_BRACE)) { //array
       int elementCount = compiler.array();

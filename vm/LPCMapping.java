@@ -21,6 +21,11 @@ public class LPCMapping {
   public Object get(Object key) {
     return map.get(key);
   }
+  
+  //set(Object, Object)
+  public void set(Object key, Object value) {
+    map.put(key, value);
+  }
 
   //containsKey(Object)
   public boolean containsKey(Object key) {

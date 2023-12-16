@@ -21,6 +21,11 @@ public class LPCArray {
   public Object get(int index) {
     return array.get(index);
   }
+  
+  //set(int, Object)
+  public void set(int index, Object value) {
+    array.set(index, value);
+  }
 
   //size()
   public int size() {

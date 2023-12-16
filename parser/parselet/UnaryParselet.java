@@ -9,7 +9,7 @@ import jbLPC.parser.Parser;
 import jbLPC.scanner.TokenType;
 
 public class UnaryParselet implements Parselet {
-  //parse(Parser, LPCCompiler, boolean)
+  //parse(Parser, C_Compiler, boolean)
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     TokenType operatorType = parser.previous().type();
 

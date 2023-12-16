@@ -8,7 +8,7 @@ import jbLPC.compiler.C_Compiler;
 import jbLPC.parser.Parser;
 
 public class InvokeParselet implements Parselet {
-  //parse(Parser, LPCCompiler, boolean)
+  //parse(Parser, C_Compiler, boolean)
   public void parse(Parser parser, C_Compiler compiler, boolean canAssign) {
     parser.consume(TOKEN_IDENTIFIER, "Expect method name after '->'.");
 
