@@ -10,17 +10,21 @@ public class NativePrint extends NativeFn {
 
   //execute(Object[])
   public Object execute(Object[] args) {
-    Object o = args[0];
+    if (args.length == 0)
+      vm.write("");
+    else if (args.length == 1) {
+      Object o = args[0];
 
-    if (o instanceof Number) {
-      double d = (double)o;
+      if (o instanceof Number) {
+        double d = (double)o;
 
-      if (d == (long)d)
-        System.out.print(String.format("%d", (long)d));
-      else
-        System.out.print(String.format("%s", d));
-    } else
-      System.out.print(o);
+        if (d == (long)d)
+          vm.write(String.format("%d", (long)d));
+        else
+      	  vm.write(String.format("%s", d));
+      } else
+        vm.write(o.toString());
+    }
 
     return null;
   }

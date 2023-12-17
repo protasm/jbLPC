@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 import jbLPC.compiler.C_Compiler;
+import jbLPC.debug.Debugger;
 import jbLPC.parser.parselet.*;
 import jbLPC.scanner.Scanner;
 import jbLPC.scanner.Token;
@@ -43,9 +44,9 @@ public class Parser {
   private boolean panicMode;
 
   //Parser()
-  public Parser(C_Compiler c_Compiler, String source) {
+  public Parser(C_Compiler c_Compiler, Debugger debugger, String source) {
     this.c_Compiler = c_Compiler;
-    tokens = new Scanner(source);
+    tokens = new Scanner(debugger, source);
 
     tokenTypeToRule = new HashMap<>();
 

@@ -50,9 +50,6 @@ import static jbLPC.scanner.TokenType.TOKEN_TRUE;
 import static jbLPC.scanner.TokenType.TOKEN_WHILE;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -120,8 +117,8 @@ public class Scanner implements Iterator<Token> {
     };
   }
 
-  // Scanner(String)
-  public Scanner(String source) {
+  // Scanner(Debugger String)
+  public Scanner(Debugger debugger, String source) {
     try (Preprocessor pp = new Preprocessor()) {
       pp.addInput(new StringLexerSource(source, true));
       pp.getSystemIncludePath().add(".");
@@ -132,9 +129,9 @@ public class Scanner implements Iterator<Token> {
       e.printStackTrace();
     }
 
-    Debugger.instance().printSource(ss.toString());
+    debugger.printSource(ss.toString());
 
-    Debugger.instance().printProgress("Scanner initialized");
+    debugger.printProgress("Scanner initialized");
   }
 
   // lexToken()
@@ -360,29 +357,5 @@ public class Scanner implements Iterator<Token> {
   @Override
   public void remove() {
     throw new UnsupportedOperationException();
-  }
-
-  // main(String[])
-  public static void main(String[] args) {
-    String path = "/Users/jonathan/lib/obj/testobj.c";
-
-    try {
-      byte[] bytes = Files.readAllBytes(Paths.get(path));
-      String source = new String(bytes, Charset.defaultCharset());
-
-      Scanner scanner = new Scanner(source);
-      Token token;
-
-      for (;;) {
-        token = scanner.next();
-
-        if (token.type() == TOKEN_EOF)
-          break;
-
-        System.out.println(token);
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
   }
 }

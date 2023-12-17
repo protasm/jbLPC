@@ -66,6 +66,7 @@ import jbLPC.nativefn.NativePrint;
 import jbLPC.nativefn.NativePrintLn;
 import jbLPC.util.Prefs;
 import jbLPC.util.SourceFile;
+import omitoas.app.jmud.JMudUser;
 import jbLPC.util.ObjStack;
 
 public class VM {
@@ -85,6 +86,9 @@ public class VM {
     OPERATION_GT,
     OPERATION_LT,
   }
+  
+  private JMudUser user;
+  private Debugger debugger;
 
   private Map<String, Object> globals;
   private Map<String, NativeFn> nativeFns;
@@ -95,7 +99,10 @@ public class VM {
   public boolean execCompilation;
 
   //VM()
-  public VM() {
+  public VM(JMudUser user) {
+	this.user = user;
+	debugger = new Debugger(user);
+
     globals = new HashMap<>();
     nativeFns = new HashMap<>();
 
@@ -107,18 +114,18 @@ public class VM {
 
     reset(); //vStack, fStack, openUpvalues, execCompilation
 
-    Debugger.instance().printProgress("VM initialized");
+    debugger.printProgress("VM initialized");
   }
 
   //interpret(String)
   public InterpretResult interpret(String name, String source) {
-    C_Compiler compiler = new C_Compiler();
+    C_Compiler compiler = new C_Compiler(debugger);
     C_Compilation cScript = compiler.compile(name, source);
 
     if (cScript == null)
       return InterpretResult.INTERPRET_COMPILE_ERROR;
 
-    Debugger.instance().printProgress("Executing script '" + name + "'");
+    debugger.printProgress("Executing script '" + name + "'");
     
     vStack.push(cScript);
 
@@ -138,7 +145,7 @@ public class VM {
       if (execCompilation) {
         C_Compilation compilation = (C_Compilation)vStack.peek();
 
-        Debugger.instance().printProgress("Executing '" + compilation.name() + "'");
+       debugger.printProgress("Executing '" + compilation.name() + "'");
 
     	frame(compilation);
     	  
@@ -151,7 +158,7 @@ public class VM {
 
       byte opCode = frame.nextInstr();
 
-      Debugger.instance().traceExecution(frame, globals, vStack);
+      debugger.traceExecution(frame, globals, vStack);
 
       switch (opCode) {
         case OP_ADD: {
@@ -738,13 +745,23 @@ public class VM {
     openUpvalues = null;
     execCompilation = false;
   }
+  
+  //write(String)
+  public void write(String str) {
+    user.write(str);
+  }
+  
+  //writeLn(String)
+  public void writeLn(String str) {
+	write(str + "\n");
+  }
 
   //runtimeError(String, String...)
   void runtimeError(String message, String... args) {
-    System.err.println("Runtime Error: " + message);
+    user.write("Runtime Error: " + message);
 
     for (String s : args)
-      System.err.println(s);
+      user.write(s);
 
     //loop through RunFrames on fStack in reverse order
     for (int i = fStack.size() - 1; i >=0; i--) {
@@ -753,12 +770,12 @@ public class VM {
       C_InstrList instrList = compilation.instrList();
       int line = instrList.lines().get(instrList.lines().size() - 2);
 
-      System.err.print("[line " + line + "] in ");
+      user.write("[line " + line + "] in ");
 
       if (compilation.type() == TYPE_SCRIPT)
-        System.err.print("script.\n");
+        user.writeLn("script.");
       else
-        System.err.print(compilation.name() + "().\n");
+        user.writeLn(compilation.name() + "().");
     }
 
     reset(); // vStack, fStack, openUpvalues
@@ -772,7 +789,7 @@ public class VM {
   public C_Compilation getCompilation(String path) {
     String fullPath = getLibPath() + path;
     SourceFile file  = new SourceFile(fullPath);
-    C_ObjectCompiler compiler = new C_ObjectCompiler();
+    C_ObjectCompiler compiler = new C_ObjectCompiler(debugger);
 
     return compiler.compile(
       Paths.get(file.path()),

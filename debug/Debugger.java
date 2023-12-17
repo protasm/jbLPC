@@ -53,10 +53,9 @@ import jbLPC.compiler.C_Scope;
 import jbLPC.util.Prefs;
 import jbLPC.util.ObjStack;
 import jbLPC.vm.RunFrame;
+import omitoas.app.jmud.JMudUser;
 
 public class Debugger {
-  private static Debugger _instance; //singleton
-
   private static final String COLOR_RESET = "\033[0m";
 //  private static final String COLOR_RED = "\033[31m";
   private static final String COLOR_GREEN = "\033[32m";
@@ -64,32 +63,27 @@ public class Debugger {
 //  private static final String COLOR_BLUE = "\033[34m";
   private static final String COLOR_MAGENTA = "\033[35m";
   private static final String COLOR_CYAN = "\033[36m";
-
-  //instance()
-  public static Debugger instance() {
-    if (_instance == null) {
-      synchronized(Debugger.class) {
-        if (_instance == null)
-          _instance = new Debugger();
-      }
-    }
-
-    return _instance;
+  
+  private JMudUser user;
+  
+  //Debugger(JMudUser)
+  public Debugger(JMudUser user) {
+    this.user = user;
   }
 
   //printBanner(String)
   public void printBanner(String text) {
-    System.out.print("\n");
-    System.out.println("== " + text + " ==");
+    user.write("\n");
+    user.write("== " + text + " ==\n");
   }
 
   //printProgress(String)
   public void printProgress(String message) {
 	if (!Prefs.instance().getBoolean("prog")) return;
 
-    System.out.print("\n===");
-    System.out.print(message.toUpperCase());
-    System.out.print("===\n");
+	user.write("\n===");
+	user.write(message.toUpperCase());
+	user.write("===\n");
   }
 
   //printSource(String)
@@ -98,7 +92,7 @@ public class Debugger {
 
     printBanner("source");
 
-    System.out.println((source.length() == 0) ? "[ no source ]" : source);
+    user.writeLn((source.length() == 0) ? "[ no source ]" : source);
   }
 
   //disassembleScope(C_Scope)
@@ -113,22 +107,22 @@ public class Debugger {
 
     //codes
     if (Prefs.instance().getBoolean("codes")) {
-      System.out.print("Codes: ");
-      System.out.print(COLOR_MAGENTA);
-      System.out.print(instrList.printCodes());
-      System.out.println(COLOR_RESET);
+      user.write("Codes: ");
+      user.write(COLOR_MAGENTA);
+      user.write(instrList.printCodes());
+      user.writeLn(COLOR_RESET);
     }
 
     //locals
     if (Prefs.instance().getBoolean("locals")) {
-      System.out.print("Locals: ");
-      System.out.println(scope.locals());
+      user.write("Locals: ");
+      user.writeLn(scope.locals());
     }
 
     //upvalues
     if (Prefs.instance().getBoolean("upvals")) {
-      System.out.print("Upvalues: ");
-      System.out.println(scope.upvalues());
+      user.write("Upvalues: ");
+      user.writeLn(scope.upvalues());
     }
 
     for (int index = 0; index < codes.size();)
@@ -139,23 +133,23 @@ public class Debugger {
   public void traceExecution(RunFrame frame, Map<String, Object> globals, ObjStack vStack) {
     if (!Prefs.instance().getBoolean("exec")) return;
 
-    System.out.print("\n");
+    user.write("\n");
 
     //globals
     if (Prefs.instance().getBoolean("globals")) {
-      System.out.print(Debugger.COLOR_CYAN);
-      System.out.print("Globals: ");
-      System.out.print(globals);
-      System.out.print(Debugger.COLOR_RESET);
-      System.out.print("\n");
+      user.write(Debugger.COLOR_CYAN);
+      user.write("Globals: ");
+      user.write(globals);
+      user.write(Debugger.COLOR_RESET);
+      user.write("\n");
     }
 
     //vStack
     if (Prefs.instance().getBoolean("stack")) {
-      System.out.print(Debugger.COLOR_GREEN + "Stack: ");
-      System.out.print(vStack);
-      System.out.print(Debugger.COLOR_RESET);
-      System.out.print("\n");
+      user.write(Debugger.COLOR_GREEN + "Stack: ");
+      user.write(vStack);
+      user.write(Debugger.COLOR_RESET);
+      user.write("\n");
     }
 
     //instruction
@@ -166,22 +160,22 @@ public class Debugger {
   public int disassembleInstruction(C_InstrList instrList, int index) {
     byte instruction = getCode(instrList, index);
 
-    System.out.print(COLOR_YELLOW);
+    user.write(COLOR_YELLOW);
 
-    System.out.print(String.format("%04d", index));
+    user.write(String.format("%04d", index));
 
     if (
       (index > 0) &&
       (instrList.lines().get(index) == instrList.lines().get(index - 1))
     )
-      System.out.print("   | ");
+      user.write("   | ");
     else
-      System.out.print(String.format("%4d ", instrList.lines().get(index)));
+      user.write(String.format("%4d ", instrList.lines().get(index)));
 
     if (Prefs.instance().getBoolean("opcode")) {
-      System.out.print(COLOR_MAGENTA);
-      System.out.print("(" + String.format("%02X", instruction) + ") ");
-      System.out.print(COLOR_YELLOW);
+      user.write(COLOR_MAGENTA);
+      user.write("(" + String.format("%02X", instruction) + ") ");
+      user.write(COLOR_YELLOW);
     }
 
     switch (instruction) {
@@ -270,14 +264,14 @@ public class Debugger {
       case OP_TRUE:
         index = simpleInstruction("OP_TRUE", index); break;
       default:
-        System.out.println("Unknown opcode: " + instruction);
+        user.writeLn("Unknown opcode: " + instruction);
 
         index = index + 1;
 
         break;
     }
 
-    System.out.println(COLOR_RESET);
+    user.writeLn(COLOR_RESET);
 
     return index;
   }
@@ -287,11 +281,11 @@ public class Debugger {
     byte code = getCode(instrList, index + 1);
     C_Function function = (C_Function)getConstant(instrList, code);
 
-    System.out.print(String.format("%-16s constant: ", name));
-    System.out.print(COLOR_MAGENTA);
-    System.out.print(String.format("%d ",  code));
-    System.out.print(COLOR_YELLOW);
-    System.out.print(function);
+    user.write(String.format("%-16s constant: ", name));
+    user.write(COLOR_MAGENTA);
+    user.write(String.format("%d ",  code));
+    user.write(COLOR_YELLOW);
+    user.write(function);
 
     index += 2;
 
@@ -299,7 +293,7 @@ public class Debugger {
       boolean isLocal = (getCode(instrList, index++) != 0);
       code = getCode(instrList, index++);
 
-      System.out.print(String.format(
+      user.write(String.format(
         "%04d      |                     %s %d\n",
         index - 2, isLocal ? "local" : "upvalue", code
       ));
@@ -313,15 +307,15 @@ public class Debugger {
     byte operand = getCode(instrList, index + 1);
     Object constant = getConstant(instrList, operand);
 
-    System.out.print(String.format("%-16s constant: ", name));
-    System.out.print(COLOR_MAGENTA);
-    System.out.print(String.format("%d ",  operand));
-    System.out.print(COLOR_YELLOW);
+    user.write(String.format("%-16s constant: ", name));
+    user.write(COLOR_MAGENTA);
+    user.write(String.format("%d ",  operand));
+    user.write(COLOR_YELLOW);
 
     if (constant instanceof String)
-      System.out.print("(\"" + constant + "\")");
+      user.write("(\"" + constant + "\")");
     else
-      System.out.print("(" + constant + ")");
+      user.write("(" + constant + ")");
 
     return index + 2;
   }
@@ -332,21 +326,21 @@ public class Debugger {
     byte op2 = getCode(instrList, index + 2); //arg count
     Object constant = getConstant(instrList, op1);
 
-    System.out.print(String.format("%-16s constant: %d ", name, op1));
+    user.write(String.format("%-16s constant: %d ", name, op1));
 
     if (constant instanceof String)
-      System.out.print("(\"" + constant + "\")");
+      user.write("(\"" + constant + "\")");
     else
-      System.out.print("(" + constant + ")");
+      user.write("(" + constant + ")");
 
-    System.out.print(String.format(" (%d args)", op2));
+    user.write(String.format(" (%d args)", op2));
 
     return index + 3;
   }
 
   //simpleInstruction(String, int)
   private int simpleInstruction(String name, int index) {
-    System.out.print(String.format("%-16s", name));
+    user.write(String.format("%-16s", name));
 
     return index + 1;
   }
@@ -355,11 +349,11 @@ public class Debugger {
   private int operandInstruction(String name, C_InstrList instrList, int index, String hint) {
     byte operand = getCode(instrList, index + 1);
 
-    System.out.print(String.format("%-16s operand: ", name));
-    System.out.print(COLOR_MAGENTA);
-    System.out.print(String.format("%d ", operand));
-    System.out.print(COLOR_YELLOW);
-    System.out.print("(" + hint + ")");
+    user.write(String.format("%-16s operand: ", name));
+    user.write(COLOR_MAGENTA);
+    user.write(String.format("%d ", operand));
+    user.write(COLOR_YELLOW);
+    user.write("(" + hint + ")");
 
     return index + 2;
   }
@@ -368,8 +362,10 @@ public class Debugger {
   private int jumpInstruction(String name, int sign, C_InstrList instrList, int index) {
     byte operand = getCode(instrList, index);
 
-    System.out.print(String.format("%-16s %4d -> %d",
-      name, index, index + 3 + (sign * operand)));
+    user.write(String.format(
+      "%-16s %4d -> %d",
+      name, index, index + 3 + (sign * operand))
+    );
 
     return index + 2;
   }

@@ -11,19 +11,11 @@ public class NativePrintLn extends NativeFn {
   //execute(Object[])
   public Object execute(Object[] args) {
     if (args.length == 0)
-      System.out.println();
+      vm.writeLn("");
     else if (args.length == 1) {
-      Object o = args[0];
-
-      if (o instanceof Number) {
-        double d = (double)o;
-
-        if (d == (long)d)
-          System.out.println(String.format("%d", (long)d));
-        else
-          System.out.println(String.format("%s", d));
-      } else
-        System.out.println(o);
+      new NativePrint(vm, fnName, arity).execute(args);
+      
+      vm.write("\n");
     }
 
     return null;

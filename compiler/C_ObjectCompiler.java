@@ -37,24 +37,28 @@ import java.util.Map;
 
 import jbLPC.debug.Debugger;
 import jbLPC.parser.Parser;
-import jbLPC.parser.parselet.ThisParselet;
 import jbLPC.scanner.Token;
 
 public class C_ObjectCompiler extends C_Compiler {
   public static Map<Path, C_Compilation> compiledObjects = new HashMap<>();
   
+  //C_ObjectCompiler()
+  public C_ObjectCompiler(Debugger debugger) {
+    super(debugger);
+  }
+
   //compile(Path, String, String)
   public C_Compilation compile(Path path, String prefix, String source) {
     if (C_ObjectCompiler.compiledObjects.containsKey(path))
       return C_ObjectCompiler.compiledObjects.get(path);
 
-    parser = new Parser(this, source);
+    parser = new Parser(this, debugger, source);
     currScope = new C_Scope(
       null, //enclosing Scope
       new C_Compilation(prefix, TYPE_OBJECT) //compilation
     );
 
-    Debugger.instance().printProgress("Compiling LPCObject '" + prefix + "'");
+    debugger.printProgress("Compiling LPCObject '" + prefix + "'");
 
     int index = emitConstant(prefix);
 
@@ -78,7 +82,7 @@ public class C_ObjectCompiler extends C_Compiler {
     //end compilation
     emitCode(OP_RETURN);
 
-    Debugger.instance().disassembleScope(currScope);
+    debugger.disassembleScope(currScope);
 
     C_Compilation compiledObject = currScope.compilation();
     

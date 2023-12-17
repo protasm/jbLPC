@@ -49,13 +49,17 @@ import jbLPC.parser.Parser;
 import jbLPC.scanner.Token;
 
 public class C_Compiler {
+	
   protected Parser parser;
   protected C_Scope currScope;
-  protected C_CompilerClass currClass;
+  protected Debugger debugger;
+//  protected C_CompilerClass currClass;
 
   //C_Compiler()
-  public C_Compiler() {
-    Debugger.instance().printProgress("Compiler initialized");
+  public C_Compiler(Debugger debugger) {
+	this.debugger = debugger;
+	
+    debugger.printProgress("Compiler initialized");
   }
 
   //parser()
@@ -69,19 +73,19 @@ public class C_Compiler {
   }
 
   //currClass()
-  public C_CompilerClass currClass() {
-    return currClass;
-  }
+//  public C_CompilerClass currClass() {
+//    return currClass;
+//  }
 
   //compile(String, String)
   public C_Compilation compile(String name, String source) {
-	  parser = new Parser(this, source);
+	  parser = new Parser(this, debugger, source);
       currScope = new C_Scope(
         null, //enclosing Scope
         new C_Compilation(name, TYPE_SCRIPT)
       );
 
-    Debugger.instance().printProgress("Compiling '" + name + "'");
+    debugger.printProgress("Compiling '" + name + "'");
 
     //advance to the first non-error Token (or EOF)
     parser.advance();
@@ -97,7 +101,7 @@ public class C_Compiler {
     emitCode(OP_NIL); //return value; always null for a Script
     emitCode(OP_RETURN);
 
-    Debugger.instance().disassembleScope(currScope);
+    debugger.disassembleScope(currScope);
 
     return currScope.compilation();
   }
@@ -313,7 +317,7 @@ public class C_Compiler {
     function.setUpvalueCount(currScope.upvalues().size());
 
     if (!parser.hadError())
-      Debugger.instance().disassembleScope(currScope);
+      debugger.disassembleScope(currScope);
 
     //Step up to higher scope.
     currScope = currScope.enclosing();
