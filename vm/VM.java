@@ -66,7 +66,7 @@ import jbLPC.nativefn.NativePrint;
 import jbLPC.nativefn.NativePrintLn;
 import jbLPC.util.Prefs;
 import jbLPC.util.SourceFile;
-import omitoas.app.jmud.JMudUser;
+import omitoas.app.jmud.JMudPlayer;
 import jbLPC.util.ObjStack;
 
 public class VM {
@@ -87,7 +87,6 @@ public class VM {
     OPERATION_LT,
   }
   
-  private JMudUser user;
   private Debugger debugger;
 
   private Map<String, Object> globals;
@@ -99,9 +98,8 @@ public class VM {
   public boolean execCompilation;
 
   //VM()
-  public VM(JMudUser user) {
-	this.user = user;
-	debugger = new Debugger(user);
+  public VM(Debugger debugger) {
+	this.debugger = debugger;
 
     globals = new HashMap<>();
     nativeFns = new HashMap<>();
@@ -118,18 +116,12 @@ public class VM {
   }
 
   //interpret(String)
-  public InterpretResult interpret(String name, String source) {
-    C_Compiler compiler = new C_Compiler(debugger);
-    C_Compilation cScript = compiler.compile(name, source);
-
-    if (cScript == null)
-      return InterpretResult.INTERPRET_COMPILE_ERROR;
-
-    debugger.printProgress("Executing script '" + name + "'");
+  public InterpretResult interpret(C_Compilation compilation) {
+    debugger.printProgress("Executing script '" + compilation.name() + "'");
     
-    vStack.push(cScript);
+    vStack.push(compilation);
 
-    frame(cScript);
+    frame(compilation);
     
     return run();
   }
@@ -748,7 +740,7 @@ public class VM {
   
   //write(String)
   public void write(String str) {
-    user.write(str);
+//    user.write(str);
   }
   
   //writeLn(String)
@@ -758,10 +750,10 @@ public class VM {
 
   //runtimeError(String, String...)
   void runtimeError(String message, String... args) {
-    user.write("Runtime Error: " + message);
+//    user.write("Runtime Error: " + message);
 
     for (String s : args)
-      user.write(s);
+//      user.write(s);
 
     //loop through RunFrames on fStack in reverse order
     for (int i = fStack.size() - 1; i >=0; i--) {
@@ -770,12 +762,12 @@ public class VM {
       C_InstrList instrList = compilation.instrList();
       int line = instrList.lines().get(instrList.lines().size() - 2);
 
-      user.write("[line " + line + "] in ");
+//      user.write("[line " + line + "] in ");
 
-      if (compilation.type() == TYPE_SCRIPT)
-        user.writeLn("script.");
-      else
-        user.writeLn(compilation.name() + "().");
+      if (compilation.type() == TYPE_SCRIPT) {}
+//        user.writeLn("script.");
+      else {}
+//        user.writeLn(compilation.name() + "().");
     }
 
     reset(); // vStack, fStack, openUpvalues

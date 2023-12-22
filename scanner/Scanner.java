@@ -117,7 +117,7 @@ public class Scanner implements Iterator<Token> {
     };
   }
 
-  // Scanner(Debugger String)
+  // Scanner(Debugger, String)
   public Scanner(Debugger debugger, String source) {
     try (Preprocessor pp = new Preprocessor()) {
       pp.addInput(new StringLexerSource(source, true));
